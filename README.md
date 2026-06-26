@@ -49,6 +49,83 @@ cp .env.example .env
 
 Заполните `.env` локальными значениями, например `OPENAI_API_KEY`.
 
+## Локальный запуск
+
+Ветка с тестовой реализацией:
+
+```bash
+git checkout deployment
+```
+
+Быстрая настройка окружения:
+
+```bash
+bash scripts/setup_local.sh
+```
+
+Для Windows PowerShell:
+
+```powershell
+.\scripts\setup_local.ps1
+```
+
+Или двойным кликом / из `cmd.exe`:
+
+```cmd
+scripts\setup_local.bat
+```
+
+Запуск backend:
+
+```bash
+bash scripts/run_backend.sh
+```
+
+Для Windows PowerShell:
+
+```powershell
+.\scripts\run_backend.ps1
+```
+
+Или через `cmd.exe`:
+
+```cmd
+scripts\run_backend.bat
+```
+
+Backend будет доступен по адресам:
+
+```text
+http://localhost:8000
+http://localhost:8000/docs
+```
+
+Запуск UI во втором терминале:
+
+```bash
+bash scripts/run_ui.sh
+```
+
+Для Windows PowerShell:
+
+```powershell
+.\scripts\run_ui.ps1
+```
+
+Или через `cmd.exe`:
+
+```cmd
+scripts\run_ui.bat
+```
+
+Streamlit UI будет доступен по адресу:
+
+```text
+http://localhost:8501
+```
+
+Первичная установка может занять время из-за `docling` и `camelot-py[cv]`. Для Camelot в режиме `lattice` на системе может потребоваться Ghostscript.
+
 ## Запуск backend
 
 ```bash
