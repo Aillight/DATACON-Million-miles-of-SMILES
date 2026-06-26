@@ -78,6 +78,26 @@ curl -X POST http://localhost:8000/parse/pdf \
 
 Для режима `lattice` у Camelot на локальной машине могут потребоваться системные зависимости вроде Ghostscript. Если они не установлены, backend вернет предупреждение и попробует режим `stream`.
 
+## Чанкование текста
+
+Backend умеет делить статью по научным разделам и выбирать только релевантные блоки, например `Experimental Section` или `Results and Discussion`:
+
+```bash
+curl -X POST http://localhost:8000/chunk/text \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Experimental Section\n\nExample text.","target_sections":["experimental section"],"max_chars":1000,"overlap_chars":100}'
+```
+
+## MAS orchestration
+
+Легковесный MAS-оркестратор реализован на чистом Python в `agent/`. Тестовый endpoint прогоняет цепочку `planner -> chunker -> synthesizer` и возвращает публичный trace выполнения без скрытых рассуждений модели:
+
+```bash
+curl -X POST http://localhost:8000/agent/run \
+  -H "Content-Type: application/json" \
+  -d '{"task":"Prepare article context","text":"Results and Discussion\n\nImportant result."}'
+```
+
 ## Запуск UI
 
 В отдельном терминале:
