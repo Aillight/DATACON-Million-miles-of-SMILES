@@ -1,77 +1,23 @@
-# Hackathon AI Agent MVP
+# Будущий агент
 
-Модульный MVP ИИ-агента для хакатона.
+Модульный MVP ИИ-агента для датакона ИТМО 2026
 
 ## Структура проекта
 
 ```text
 .
-├── agent/
-│   ├── core.py        # Основная логика агента
-│   ├── prompts.py     # Промпты
+├── agents/
+│   ├── core.py        # Основная логика агентов
+│   ├── prompts.py     # Промпты / инструкции
 │   └── tools.py       # Инструменты агента
 ├── backend/
-│   └── api.py         # FastAPI backend
+│   └── api.py         # чё то под капотом
 ├── ui/
-│   └── app.py         # Streamlit UI
-├── notebooks/         # Jupyter-ноутбуки и эксперименты
+│   └── app.py         # Streamlit UI наверное
+├── notebooks/         # Jupyter-ноутбуки ?
 ├── .env.example       # Шаблон переменных окружения
-├── requirements.txt
-└── README.md
-```
-
-## Установка
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
-```
-
-Для Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-```
-
-## Настройка окружения
-
-Скопируйте шаблон переменных окружения:
-
-```bash
-cp .env.example .env
-```
-
-Заполните `.env` локальными значениями, например `OPENAI_API_KEY`.
-
-## Запуск backend
-
-```bash
-uvicorn backend.api:app --host 0.0.0.0 --port 8000 --reload
-```
-
-После запуска API будет доступен по адресу:
-
-```text
-http://localhost:8000
-```
-
-## Запуск UI
-
-В отдельном терминале:
-
-```bash
-streamlit run ui/app.py
-```
-
-Интерфейс будет доступен по адресу:
-
-```text
-http://localhost:8501
+├── requirements.txt   # зависимости
+└── README.md          # читай меня
 ```
 
 ## Роли в команде
