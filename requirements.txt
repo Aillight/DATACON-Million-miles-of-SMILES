@@ -4,3 +4,7 @@ streamlit
 langchain
 openai
 python-dotenv
+python-multipart
+docling
+camelot-py[cv]
+pandas

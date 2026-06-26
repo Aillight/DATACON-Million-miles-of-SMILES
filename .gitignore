@@ -36,6 +36,11 @@ vector_db/
 vectors/
 storage/
 
+# Local data artifacts
+data/raw/
+data/processed/
+outputs/
+
 # IDE / OS files
 .vscode/
 .idea/
