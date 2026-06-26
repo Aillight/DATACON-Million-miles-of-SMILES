@@ -11,7 +11,8 @@
 │   ├── prompts.py     # Промпты
 │   └── tools.py       # Инструменты агента
 ├── backend/
-│   └── api.py         # FastAPI backend
+│   ├── api.py         # FastAPI backend
+│   └── parsing/       # PDF parsing pipeline
 ├── ui/
 │   └── app.py         # Streamlit UI
 ├── notebooks/         # Jupyter-ноутбуки и эксперименты
@@ -59,6 +60,23 @@ uvicorn backend.api:app --host 0.0.0.0 --port 8000 --reload
 ```text
 http://localhost:8000
 ```
+
+Проверка статуса API:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Тестовый парсинг PDF:
+
+```bash
+curl -X POST http://localhost:8000/parse/pdf \
+  -F "file=@sample.pdf"
+```
+
+Текущая тестовая реализация использует Docling для извлечения текста и Camelot для таблиц. Camelot сначала пробует `lattice`, затем `stream`.
+
+Для режима `lattice` у Camelot на локальной машине могут потребоваться системные зависимости вроде Ghostscript. Если они не установлены, backend вернет предупреждение и попробует режим `stream`.
 
 ## Запуск UI
 
