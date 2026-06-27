@@ -1,21 +1,21 @@
-# Hackathon AI Agent MVP
+# Будущий агент
 
-Модульный MVP ИИ-агента для хакатона.
+Модульный MVP ИИ-агента для датакона ИТМО 2026
 
 ## Структура проекта
 
 ```text
 .
-├── agent/
-│   ├── core.py        # Основная логика агента
-│   ├── prompts.py     # Промпты
+├── agents/
+│   ├── core.py        # Основная логика агентов
+│   ├── prompts.py     # Промпты / инструкции
 │   └── tools.py       # Инструменты агента
 ├── backend/
 │   ├── api.py         # FastAPI backend
 │   └── parsing/       # PDF parsing pipeline
 ├── ui/
-│   └── app.py         # Streamlit UI
-├── notebooks/         # Jupyter-ноутбуки и эксперименты
+│   └── app.py         # Streamlit UI наверное
+├── notebooks/         # Jupyter-ноутбуки ?
 ├── .env.example       # Шаблон переменных окружения
 ├── requirements.txt
 └── README.md
