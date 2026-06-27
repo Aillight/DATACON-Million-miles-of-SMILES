@@ -36,6 +36,16 @@ vector_db/
 vectors/
 storage/
 
+# Local data artifacts
+data/raw/
+data/processed/
+data/articles/
+data/test_set/articles/
+data/test_set/*.csv
+data/test_set/*.jsonl
+data/test_set/*.json
+outputs/
+
 # IDE / OS files
 .vscode/
 .idea/
