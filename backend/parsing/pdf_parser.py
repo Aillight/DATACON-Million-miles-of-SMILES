@@ -50,13 +50,24 @@ def parse_pdf_to_markdown(pdf_path: str | Path, extract_tables: bool = True) -> 
 
 def _extract_document_markdown(path: Path, warnings: list[str]) -> str:
     try:
+        from docling.datamodel.base_models import InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
         from docling.document_converter import DocumentConverter
+        from docling.document_converter import PdfFormatOption
     except ImportError:
         warnings.append("Docling is not installed; document text extraction was skipped.")
         return ""
 
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.do_ocr = False
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+        }
+    )
+
     try:
-        result = DocumentConverter().convert(str(path))
+        result = converter.convert(str(path))
         document = result.document
         if hasattr(document, "export_to_markdown"):
             return document.export_to_markdown()
