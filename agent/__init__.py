@@ -1,4 +1,54 @@
 from agent.core import build_default_orchestrator, run_agent_task
+from agent.extraction_graph import (
+    DEFAULT_HUGGINGFACE_MODEL,
+    ExtractedProperty,
+    ExtractionBatch,
+    ExtractionPromptContext,
+    ValidatedProperty,
+    build_extraction_prompt,
+    build_small_molecule_extraction_graph,
+    make_huggingface_structured_extractor,
+    make_openai_structured_extractor,
+    resolve_huggingface_token,
+    run_small_molecule_extraction,
+)
+from agent.nano_extraction_graph import (
+    ExtractedNanozymeProperty,
+    NanozymeExtractionBatch,
+    ValidatedNanozymeProperty,
+    build_nanozyme_extraction_prompt,
+    build_nanozyme_extraction_graph,
+    make_huggingface_nanozyme_extractor,
+    run_nanozyme_extraction,
+    validate_and_normalize_nanozyme_rows,
+    validate_material_formula,
+)
 from agent.orchestrator import AgentSpec, AgentState, MASOrchestrator
 
-__all__ = ["AgentSpec", "AgentState", "MASOrchestrator", "build_default_orchestrator", "run_agent_task"]
+__all__ = [
+    "AgentSpec",
+    "AgentState",
+    "DEFAULT_HUGGINGFACE_MODEL",
+    "ExtractedProperty",
+    "ExtractedNanozymeProperty",
+    "ExtractionBatch",
+    "ExtractionPromptContext",
+    "MASOrchestrator",
+    "NanozymeExtractionBatch",
+    "ValidatedProperty",
+    "ValidatedNanozymeProperty",
+    "build_default_orchestrator",
+    "build_extraction_prompt",
+    "build_nanozyme_extraction_graph",
+    "build_nanozyme_extraction_prompt",
+    "build_small_molecule_extraction_graph",
+    "make_huggingface_structured_extractor",
+    "make_huggingface_nanozyme_extractor",
+    "make_openai_structured_extractor",
+    "resolve_huggingface_token",
+    "run_agent_task",
+    "run_nanozyme_extraction",
+    "run_small_molecule_extraction",
+    "validate_and_normalize_nanozyme_rows",
+    "validate_material_formula",
+]
