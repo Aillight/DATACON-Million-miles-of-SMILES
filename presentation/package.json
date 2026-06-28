@@ -1,0 +1,20 @@
+{
+  "name": "datacon-extraction-presentation",
+  "version": "1.0.0",
+  "description": "PowerPoint deck source for the DataCon Extraction Agent project",
+  "main": "datacon_extraction_presentation.js",
+  "scripts": {
+    "build": "node datacon_extraction_presentation.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "fontkit": "^2.0.4",
+    "linebreak": "^1.1.0",
+    "pptxgenjs": "^4.0.1",
+    "prismjs": "^1.30.0",
+    "skia-canvas": "^3.0.8"
+  }
+}
