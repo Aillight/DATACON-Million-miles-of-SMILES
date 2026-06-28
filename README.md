@@ -1,6 +1,6 @@
-# DataCon ChemX Agent
+# DataCon Multi-Agents System
 
-Локальный multi-agent пайплайн для извлечения химических данных из PDF-статей.
+Локальный multi-agents пайплайн для извлечения химических данных из PDF-статей
 
 Проект умеет:
 - парсить PDF в Markdown и таблицы через Docling/Camelot;
