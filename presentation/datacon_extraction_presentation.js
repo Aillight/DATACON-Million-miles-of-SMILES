@@ -256,47 +256,47 @@ function metric(slide, value, label, x, y, w, color = C.blue) {
     fontSize: 32,
     bold: true,
   });
-  text(s, "Multi-agent extraction pipeline for chemistry PDFs", 0.78, 1.82, 8.6, 0.35, {
+  text(s, "Помогает превратить научную PDF-статью в проверяемую таблицу", 0.78, 1.82, 8.6, 0.35, {
     fontSize: 15,
     color: C.muted,
   });
-  flow(s, ["PDF article", "Agents", "Validation", "Clean CSV"], 0.78, 3.05, 8.8, 0.72);
-  card(s, "Что делает система", "От PDF-статьи до проверяемой таблицы: Results, Evidence, Rejected, Conflicts, Vision и agent trace.", 0.78, 4.55, 5.4, 1.25, { accent: C.blue });
-  card(s, "Главная идея", "LLM извлекает кандидатов, Python-валидаторы проверяют факты, UI показывает причину каждого решения.", 6.55, 4.55, 5.75, 1.25, { accent: C.green });
+  flow(s, ["PDF-статья", "Агенты", "Проверка", "Чистый CSV"], 0.78, 3.05, 8.8, 0.72);
+  card(s, "Что делает система", "Берёт статью, находит в ней данные, проверяет их и показывает, откуда взялась каждая строка.", 0.78, 4.55, 5.4, 1.25, { accent: C.blue });
+  card(s, "Главная идея", "Модель предлагает кандидатов, а валидаторы и интерфейс помогают понять: строке можно доверять или её нужно отклонить.", 6.55, 4.55, 5.75, 1.25, { accent: C.green });
   text(s, "DataCon 2026", 0.78, 6.75, 3.2, 0.25, { fontSize: 10, color: C.muted });
   slides.push(s);
 }
 
 // 2
 {
-  const s = addSlide("Один слайд: что построено", "PROJECT SUMMARY");
-  card(s, "Цель", "Сделать локальный инструмент, который превращает научную PDF-статью в проверяемый CSV для DataCon-задач извлечения данных.", 0.7, 1.55, 3.9, 1.5, { accent: C.blue });
-  card(s, "Подход", "Multi-agent pipeline: parsing, retrieval, extraction, validation, vision, aggregation и quality scoring.", 4.85, 1.55, 3.9, 1.5, { accent: C.green });
-  card(s, "Результат", "Streamlit UI + CLI + CSV/JSON артефакты + документация + воспроизводимый локальный запуск.", 9.0, 1.55, 3.5, 1.5, { accent: C.amber });
-  metric(s, "93", "unit tests", 1.1, 4.0, 2.0, C.blue);
-  metric(s, "3", "LLM providers", 4.1, 4.0, 2.0, C.green);
-  metric(s, "2", "data domains", 7.1, 4.0, 2.0, C.amber);
-  metric(s, "1", "simple UI", 10.1, 4.0, 2.0, C.red);
+  const s = addSlide("Что получилось", "ИТОГ ПРОЕКТА");
+  card(s, "Цель", "Локальный инструмент, который превращает сложную научную статью в понятный и проверяемый CSV.", 0.7, 1.55, 3.9, 1.5, { accent: C.blue });
+  card(s, "Подход", "Несколько специализированных агентов: читают PDF, выбирают контекст, извлекают строки, проверяют и собирают результат.", 4.85, 1.55, 3.9, 1.5, { accent: C.green });
+  card(s, "Результат", "Рабочий Streamlit-интерфейс, CLI-запуск, выгрузки CSV/JSON, документация и воспроизводимый локальный проект.", 9.0, 1.55, 3.5, 1.5, { accent: C.amber });
+  metric(s, "93", "теста", 1.1, 4.0, 2.0, C.blue);
+  metric(s, "3", "LLM-провайдера", 4.1, 4.0, 2.0, C.green);
+  metric(s, "2", "типа данных", 7.1, 4.0, 2.0, C.amber);
+  metric(s, "1", "простой интерфейс", 10.1, 4.0, 2.0, C.red);
 }
 
 // 3
 {
-  const s = addSlide("Проблема", "WHY IT MATTERS");
+  const s = addSlide("Проблема", "ЗАЧЕМ ЭТО НУЖНО");
   bulletList(s, [
-    "PDF-статьи содержат нужные данные в тексте, таблицах, формулах и картинках.",
-    "LLM без валидаторов часто даёт синтаксически красивый, но химически неверный JSON.",
-    "Для соревнования важны не только строки CSV, но и воспроизводимая проверка качества.",
-    "Пользователю нужно видеть, откуда взялась строка и почему часть строк отклонена.",
+    "В статьях нужные числа размазаны по тексту, таблицам, формулам и изображениям.",
+    "Одна модель может красиво заполнить JSON, но ошибиться в SMILES, формуле или единицах измерения.",
+    "Нужен не просто CSV, а результат, который можно быстро проверить и повторить.",
+    "Важно видеть не только принятые строки, но и то, что система отклонила.",
   ], 0.85, 1.55, 5.25, 3.35, { fontSize: 14 });
-  flow(s, ["PDF", "noise", "missing units", "bad formulas", "CSV risk"], 6.7, 2.0, 5.4, 0.62, [C.light, C.red2, C.red2, C.red2, C.amber2]);
-  card(s, "Ключевой риск", "Если не показывать evidence и rejected rows, невозможно быстро понять: ошибка в модели, в PDF-парсинге или в правилах валидации.", 6.7, 3.25, 5.4, 1.65, { accent: C.red });
+  flow(s, ["PDF", "шум", "нет unit", "плохая формула", "риск CSV"], 6.7, 2.0, 5.4, 0.62, [C.light, C.red2, C.red2, C.red2, C.amber2]);
+  card(s, "Ключевой риск", "Без evidence и rejected rows трудно понять, где проблема: в модели, в PDF-парсинге или в правилах проверки.", 6.7, 3.25, 5.4, 1.65, { accent: C.red });
 }
 
 // 4
 {
-  const s = addSlide("Что извлекаем", "DOMAINS");
-  card(s, "Small molecules", "Oxazolidinones / Benzimidazoles\n\nПоля: compound_id, SMILES, canonical SMILES, property_name, value, unit.\n\nВалидатор: RDKit.", 0.75, 1.55, 5.7, 3.25, { accent: C.blue });
-  card(s, "Nanozymes / Nanocatalysts", "Формулы и свойства материалов: size, diameter, Km, Vmax, yield, conversion, selectivity.\n\nВалидаторы: formula sanity, physical sanity, property policy.", 6.9, 1.55, 5.7, 3.25, { accent: C.green });
+  const s = addSlide("С какими данными работает", "ДАННЫЕ");
+  card(s, "Малые молекулы", "Например Oxazolidinones / Benzimidazoles.\n\nСистема извлекает compound id, SMILES, свойство, значение и unit.\n\nSMILES проверяется через RDKit.", 0.75, 1.55, 5.7, 3.25, { accent: C.blue });
+  card(s, "Наноматериалы и катализаторы", "Формулы материалов и экспериментальные свойства: размеры, Km, Vmax, yield, conversion, selectivity.\n\nПроверяются формулы и физический смысл значений.", 6.9, 1.55, 5.7, 3.25, { accent: C.green });
   pill(s, "SMILES -> canonical", 1.0, 5.35, 2.3);
   pill(s, "formula -> normalized", 4.0, 5.35, 2.3, C.green2, C.green);
   pill(s, "text + table + vision", 7.0, 5.35, 2.6, C.amber2, C.amber);
@@ -305,114 +305,114 @@ function metric(slide, value, label, x, y, w, color = C.blue) {
 
 // 5
 {
-  const s = addSlide("Пользовательский сценарий", "USER FLOW");
-  flow(s, ["1. Select domain", "2. Upload PDF", "3. Choose extractor", "4. Add API key", "5. Run"], 0.85, 1.6, 11.65, 0.75);
-  card(s, "Минимум действий", "Обычный сценарий укладывается в четыре шага: домен, PDF, extractor, Run. Дополнительные параметры спрятаны в Advanced.", 0.95, 3.0, 5.45, 1.5, { accent: C.blue });
-  card(s, "API без боли", "Ключ можно вставить прямо в UI на один запуск или положить в `.env`. Секреты не попадают в git.", 6.9, 3.0, 5.45, 1.5, { accent: C.green });
-  card(s, "Проверяемость", "После запуска сразу видны clean rows, rejected rows, conflicts, evidence, agent trace и логи.", 0.95, 5.05, 11.4, 0.9, { accent: C.amber });
+  const s = addSlide("Как с этим работать", "СЦЕНАРИЙ");
+  flow(s, ["Выбрать домен", "Загрузить PDF", "Выбрать модель", "Добавить ключ", "Нажать Run"], 0.85, 1.6, 11.65, 0.75);
+  card(s, "Минимум действий", "Пользователь делает несколько понятных шагов. Тонкие настройки спрятаны в Advanced и не мешают основному сценарию.", 0.95, 3.0, 5.45, 1.5, { accent: C.blue });
+  card(s, "Ключи без настройки системы", "API-ключ можно вставить прямо в интерфейс на один запуск или положить в `.env`. В репозиторий секреты не попадают.", 6.9, 3.0, 5.45, 1.5, { accent: C.green });
+  card(s, "После запуска всё видно", "Итоговая таблица, отклонённые строки, конфликты, evidence, путь агентов и технический лог доступны в отдельных вкладках.", 0.95, 5.05, 11.4, 0.9, { accent: C.amber });
 }
 
 // 6
 {
-  const s = addSlide("Архитектура пайплайна", "PIPELINE");
-  flow(s, ["PDF parser", "Text cleanup", "Chunking", "Retrieval", "Extractor", "Validator", "Aggregation"], 0.65, 1.55, 12.0, 0.7);
-  card(s, "Parser", "Docling/Camelot превращают PDF в Markdown, таблицы и warnings.", 0.8, 2.75, 2.7, 1.2, { accent: C.blue });
-  card(s, "Retrieval", "TF-IDF или HF embeddings выбирают наиболее полезные чанки.", 3.75, 2.75, 2.7, 1.2, { accent: C.green });
-  card(s, "Extraction", "LLM возвращает structured rows по Pydantic schema.", 6.7, 2.75, 2.7, 1.2, { accent: C.amber });
-  card(s, "Aggregation", "Pandas дедуплицирует, решает конфликты и готовит CSV.", 9.65, 2.75, 2.7, 1.2, { accent: C.red });
-  text(s, "Идея: LLM не является единственным источником истины. Каждый шаг пишет trace и отдаёт данные Python-валидаторам.", 0.9, 5.0, 11.55, 0.75, { fontSize: 17, bold: true, color: C.ink, align: "center" });
+  const s = addSlide("Архитектура пайплайна", "КАК УСТРОЕНО");
+  flow(s, ["Читаем PDF", "Чистим текст", "Режем на чанки", "Выбираем важное", "Извлекаем", "Проверяем", "Собираем CSV"], 0.65, 1.55, 12.0, 0.7);
+  card(s, "Чтение PDF", "Docling/Camelot достают текст, таблицы и предупреждения о проблемах парсинга.", 0.8, 2.75, 2.7, 1.2, { accent: C.blue });
+  card(s, "Выбор контекста", "Retrieval выбирает куски статьи, где с высокой вероятностью есть нужные значения.", 3.75, 2.75, 2.7, 1.2, { accent: C.green });
+  card(s, "Извлечение", "Модель возвращает строки в строгом формате, чтобы их можно было проверить программно.", 6.7, 2.75, 2.7, 1.2, { accent: C.amber });
+  card(s, "Сборка результата", "Pandas убирает дубли, решает конфликты и готовит итоговые таблицы.", 9.65, 2.75, 2.7, 1.2, { accent: C.red });
+  text(s, "Главный принцип: модель не является последней инстанцией. Каждая строка проходит проверку и оставляет след.", 0.9, 5.0, 11.55, 0.75, { fontSize: 17, bold: true, color: C.ink, align: "center" });
 }
 
 // 7
 {
-  const s = addSlide("Multi-agent система", "AGENTS");
+  const s = addSlide("Система агентов", "КТО ЧТО ДЕЛАЕТ");
   const agents = [
-    ["ParserAgent", "PDF -> Markdown, tables, chunks"],
-    ["RouterAgent", "выбор домена и extraction graph"],
-    ["RetrievalAgent", "ranking релевантных чанков"],
-    ["ExtractorValidatorAgent", "LLM extraction + retry loop"],
-    ["VisionAgent", "панели, scale bar, частицы"],
-    ["AggregatorAgent", "clean / rejected / conflicts"],
+    ["ParserAgent", "читает PDF и готовит текст"],
+    ["RouterAgent", "выбирает нужный сценарий"],
+    ["RetrievalAgent", "находит важные фрагменты"],
+    ["ExtractorValidatorAgent", "извлекает и перепроверяет строки"],
+    ["VisionAgent", "работает с картинками и scale bar"],
+    ["AggregatorAgent", "собирает финальные таблицы"],
   ];
   agents.forEach((a, i) => {
     const x = 0.85 + (i % 3) * 4.05;
     const y = 1.55 + Math.floor(i / 3) * 1.75;
     card(s, a[0], a[1], x, y, 3.45, 1.1, { accent: [C.blue, C.green, C.amber, C.blue, C.green, C.red][i], bodySize: 10 });
   });
-  text(s, "В UI это видно во вкладке Agents: агент, статус, summary, metrics и warnings.", 1.0, 5.6, 11.4, 0.45, { fontSize: 16, bold: true, align: "center" });
+  text(s, "Вкладка Agents показывает, какой этап что сделал, где были предупреждения и сколько данных прошло дальше.", 1.0, 5.6, 11.4, 0.45, { fontSize: 16, bold: true, align: "center" });
 }
 
 // 8
 {
-  const s = addSlide("Цикл извлечения и валидации", "LANGGRAPH LOOP");
-  flow(s, ["Chunk", "LLM extractor", "Pydantic schema", "Python critic", "Retry or Done"], 0.85, 1.55, 11.65, 0.75, [C.light, C.blue2, C.green2, C.amber2, C.light]);
+  const s = addSlide("Цикл извлечения и валидации", "ЦИКЛ ПРОВЕРКИ");
+  flow(s, ["Чанк", "Модель", "Строгая схема", "Python-проверка", "Повтор или готово"], 0.85, 1.55, 11.65, 0.75, [C.light, C.blue2, C.green2, C.amber2, C.light]);
   card(s, "Small molecules", "Критик: RDKit\n\nПроверяет SMILES, канонизирует, ловит ошибки колец/валентности, исключает дубли.", 1.0, 3.0, 5.1, 1.95, { accent: C.blue });
   card(s, "Nano / catalyst", "Критик: formula + sanity\n\nПроверяет формулы, физические величины, допустимость endpoint и отправляет плохие строки в Rejected.", 7.0, 3.0, 5.1, 1.95, { accent: C.green });
-  text(s, "Retry limit: до 3 попыток на чанк. Ошибки валидации добавляются в следующий prompt.", 1.1, 5.65, 11.0, 0.35, { fontSize: 14, color: C.muted, align: "center" });
+  text(s, "Если проверка нашла ошибку, система даёт модели ещё одну попытку и прямо сообщает, что нужно исправить.", 1.1, 5.65, 11.0, 0.35, { fontSize: 14, color: C.muted, align: "center" });
 }
 
 // 9
 {
-  const s = addSlide("Retrieval: меньше шума для модели", "CONTEXT SELECTION");
-  card(s, "TF-IDF", "Быстро и локально. Хороший default для демо и воспроизводимости.", 0.9, 1.65, 3.6, 1.5, { accent: C.blue });
-  card(s, "Hybrid HF embeddings", "Использует HF feature extraction, если есть HF_TOKEN. Даёт semantic ranking.", 4.85, 1.65, 3.6, 1.5, { accent: C.green });
-  card(s, "UI trace", "Во вкладке Chunks видно selected, rank, score, method и preview.", 8.8, 1.65, 3.6, 1.5, { accent: C.amber });
-  flow(s, ["All chunks", "ranked chunks", "top-k", "LLM input"], 2.0, 4.25, 9.2, 0.7);
-  text(s, "Зачем: LLM получает не всю статью, а наиболее вероятные разделы с результатами, таблицами и экспериментом.", 1.25, 5.65, 10.8, 0.42, { fontSize: 15, bold: true, align: "center" });
+  const s = addSlide("Как выбирается контекст", "МЕНЬШЕ ШУМА");
+  card(s, "TF-IDF", "Быстрый локальный вариант. Хорошо подходит как стабильный default.", 0.9, 1.65, 3.6, 1.5, { accent: C.blue });
+  card(s, "HF embeddings", "Если есть HF_TOKEN, можно включить семантический поиск по смыслу, а не только по словам.", 4.85, 1.65, 3.6, 1.5, { accent: C.green });
+  card(s, "Прозрачность", "Во вкладке Chunks видно, какие фрагменты выбраны и почему они попали в обработку.", 8.8, 1.65, 3.6, 1.5, { accent: C.amber });
+  flow(s, ["Все чанки", "оценка", "top-k", "вход модели"], 2.0, 4.25, 9.2, 0.7);
+  text(s, "Зачем: модель читает не всю статью подряд, а наиболее вероятные места с результатами, таблицами и экспериментом.", 1.25, 5.65, 10.8, 0.42, { fontSize: 15, bold: true, align: "center" });
 }
 
 // 10
 {
-  const s = addSlide("Computer Vision слой", "VISION");
-  card(s, "Что делает", "Рендерит страницы, выделяет панели, ищет scale bar и оценивает размеры частиц по контурам.", 0.9, 1.55, 5.25, 1.55, { accent: C.blue });
-  card(s, "Как попадает в данные", "Если найден материал из текста, CV-измерение превращается в строку `particle diameter` с source_type=vision.", 6.7, 1.55, 5.25, 1.55, { accent: C.green });
-  flow(s, ["PDF page", "panel crop", "scale bar", "particles", "vision row"], 1.0, 3.9, 11.2, 0.7, [C.light, C.blue2, C.green2, C.amber2, C.light]);
-  text(s, "Если scale bar или material hint не найден, строка не теряется молча: она уходит в Rejected с причиной.", 1.15, 5.55, 10.9, 0.45, { fontSize: 15, bold: true, align: "center" });
+  const s = addSlide("Что даёт компьютерное зрение", "ИЗОБРАЖЕНИЯ");
+  card(s, "Что делает", "Система смотрит на страницы статьи как на изображения: выделяет панели, ищет scale bar и оценивает размеры частиц.", 0.9, 1.55, 5.25, 1.55, { accent: C.blue });
+  card(s, "Как это становится данными", "Если найден материал из текста, измерение с картинки добавляется как отдельная строка `particle diameter`.", 6.7, 1.55, 5.25, 1.55, { accent: C.green });
+  flow(s, ["страница", "панель", "scale bar", "частицы", "строка данных"], 1.0, 3.9, 11.2, 0.7, [C.light, C.blue2, C.green2, C.amber2, C.light]);
+  text(s, "Если масштаба или материала не хватает, система не делает вид, что всё хорошо: строка уходит в Rejected с причиной.", 1.15, 5.55, 10.9, 0.45, { fontSize: 15, bold: true, align: "center" });
 }
 
 // 11
 {
-  const s = addSlide("Aggregation: чистый CSV", "OUTPUT LOGIC");
-  card(s, "Deduplication", "Группировка по canonical SMILES/property или normalized formula/property/unit/assay/condition.", 0.9, 1.55, 3.7, 1.45, { accent: C.blue });
-  card(s, "Source priority", "Таблицы имеют приоритет над текстом; vision расположен между table и text.", 4.85, 1.55, 3.7, 1.45, { accent: C.green });
-  card(s, "Conflicts", "Если значения расходятся, выбранная строка идёт в Results, альтернативы попадают в Conflicts.", 8.8, 1.55, 3.7, 1.45, { accent: C.amber });
-  flow(s, ["validated rows", "normalize", "sort priority", "deduplicate", "clean.csv"], 1.25, 4.15, 10.7, 0.7);
+  const s = addSlide("Как получается чистый CSV", "ЛОГИКА ВЫХОДА");
+  card(s, "Убираем дубли", "Одинаковые молекулы или материалы собираются вместе, чтобы в итоговой таблице не было повторов.", 0.9, 1.55, 3.7, 1.45, { accent: C.blue });
+  card(s, "Выбираем надёжный источник", "Табличные значения обычно точнее текста, поэтому получают более высокий приоритет.", 4.85, 1.55, 3.7, 1.45, { accent: C.green });
+  card(s, "Не прячем расхождения", "Если значения конфликтуют, выбранная строка идёт в Results, а альтернативы остаются в Conflicts.", 8.8, 1.55, 3.7, 1.45, { accent: C.amber });
+  flow(s, ["проверенные строки", "нормализация", "приоритет", "дедупликация", "clean.csv"], 1.25, 4.15, 10.7, 0.7);
 }
 
 // 12
 {
-  const s = addSlide("Quality score и evidence", "TRUST");
-  card(s, "quality_score", "Численный индикатор 0-100. Учитывает источник, валидный идентификатор, unit, evidence и condition.", 0.9, 1.55, 5.45, 1.65, { accent: C.blue });
-  card(s, "quality_flags", "`from_table`, `from_text`, `from_vision`, `valid_formula`, `valid_smiles`, `has_unit`, `has_evidence`.", 6.9, 1.55, 5.45, 1.65, { accent: C.green });
-  card(s, "Evidence tab", "Для каждой строки Results можно открыть полный фрагмент текста, из которого взято значение.", 0.9, 4.0, 5.45, 1.45, { accent: C.amber });
-  card(s, "Rejected tab", "Плохие строки не исчезают: сохраняются причина, валидатор, source_id и evidence.", 6.9, 4.0, 5.45, 1.45, { accent: C.red });
+  const s = addSlide("Оценка качества и источник", "ДОВЕРИЕ");
+  card(s, "quality_score", "Быстрый ориентир 0-100: насколько строка выглядит надёжной по источнику, unit, evidence и валидному идентификатору.", 0.9, 1.55, 5.45, 1.65, { accent: C.blue });
+  card(s, "quality_flags", "Короткие метки вроде `from_table`, `valid_formula`, `has_unit`, `has_evidence` объясняют, из чего сложился score.", 6.9, 1.55, 5.45, 1.65, { accent: C.green });
+  card(s, "Evidence", "Для каждой принятой строки можно открыть полный фрагмент статьи, из которого взято значение.", 0.9, 4.0, 5.45, 1.45, { accent: C.amber });
+  card(s, "Rejected", "Неподходящие строки не исчезают: сохраняются причина, валидатор и исходный фрагмент.", 6.9, 4.0, 5.45, 1.45, { accent: C.red });
 }
 
 // 13
 {
-  const s = addSlide("UI: что видит пользователь", "STREAMLIT");
+  const s = addSlide("Что видит пользователь", "ИНТЕРФЕЙС");
   bulletList(s, [
-    "Sidebar: домен, PDF, extractor, Run, временные API-ключи.",
-    "Advanced: chunks, attempts, retrieval, model ids, vision pages, scale label.",
-    "Main tabs: Results, Evidence, Rejected, Conflicts, Vision, Agents, Chunks, Log, Markdown.",
-    "Download-кнопки и локальные CSV-копии одинаковы на всех вкладках.",
+    "Слева: домен, PDF, модель, запуск и временные API-ключи.",
+    "В Advanced: размер контекста, число попыток, retrieval, модели и параметры vision.",
+    "В центре: Results, Evidence, Rejected, Conflicts, Vision, Agents, Chunks, Log, Markdown.",
+    "На каждой вкладке с таблицей есть download-кнопка и локальная CSV-копия.",
   ], 0.95, 1.55, 6.0, 3.55, { fontSize: 13.5 });
-  card(s, "Design principle", "Максимум пользы на первом экране: таблица, статус и диагностика. Подробности доступны, но не мешают основному flow.", 7.25, 2.0, 4.8, 1.8, { accent: C.blue });
-  flow(s, ["Run", "Results", "Evidence", "Download CSV"], 7.25, 4.55, 4.8, 0.65);
+  card(s, "Принцип интерфейса", "Пользователь сначала видит результат, а диагностика остаётся рядом: её легко открыть, но она не перегружает основной сценарий.", 7.25, 2.0, 4.8, 1.8, { accent: C.blue });
+  flow(s, ["Run", "Results", "Evidence", "CSV"], 7.25, 4.55, 4.8, 0.65);
 }
 
 // 14
 {
-  const s = addSlide("API-провайдеры", "LLM CONNECTIVITY");
-  card(s, "Hugging Face", "`HF_TOKEN`\n\nБесплатные/open-weight модели. Используется и для embeddings.", 0.9, 1.55, 3.5, 2.2, { accent: C.blue });
-  card(s, "OpenRouter", "`OPENROUTER_API_KEY`\n\nOpenAI-compatible `chat.completions.create`. Работает для small molecules и Nanozymes.", 4.9, 1.55, 3.5, 2.2, { accent: C.green });
-  card(s, "OpenAI", "`OPENAI_API_KEY`\n\nПодключён через structured `responses.parse`. Сейчас для small molecules.", 8.9, 1.55, 3.5, 2.2, { accent: C.amber });
-  card(s, "Удобство", "Ключи можно вставить прямо в UI на один запуск, положить в `.env`, Streamlit secrets или системные переменные.", 1.05, 4.65, 11.1, 1.1, { accent: C.blue });
+  const s = addSlide("API-провайдеры", "МОДЕЛИ");
+  card(s, "Hugging Face", "`HF_TOKEN`\n\nПодходит для open-weight моделей и embedding retrieval.", 0.9, 1.55, 3.5, 2.2, { accent: C.blue });
+  card(s, "OpenRouter", "`OPENROUTER_API_KEY`\n\nУдобный единый вход к разным моделям. Работает и для малых молекул, и для наноматериалов.", 4.9, 1.55, 3.5, 2.2, { accent: C.green });
+  card(s, "OpenAI", "`OPENAI_API_KEY`\n\nИспользуется structured output. Сейчас включён для small-molecule сценария.", 8.9, 1.55, 3.5, 2.2, { accent: C.amber });
+  card(s, "Удобство", "Ключ можно вставить в UI на один запуск или хранить в `.env`, Streamlit secrets либо системных переменных.", 1.05, 4.65, 11.1, 1.1, { accent: C.blue });
 }
 
 // 15
 {
-  const s = addSlide("CLI и артефакты", "REPRODUCIBILITY");
+  const s = addSlide("CLI и артефакты", "ВОСПРОИЗВОДИМОСТЬ");
   text(s, ".venv\\Scripts\\python.exe scripts\\run_article_pipeline.py article.pdf --domain Nanozymes --extractor openrouter", 0.9, 1.6, 11.8, 0.4, {
     fontFace: "Cascadia Mono",
     fontSize: 11,
@@ -433,56 +433,56 @@ function metric(slide, value, label, x, y, w, color = C.blue) {
     const y = 2.75 + Math.floor(i / 4) * 0.85;
     pill(s, a, x, y, 2.35, i % 2 ? C.green2 : C.blue2, i % 2 ? C.green : C.blue);
   });
-  card(s, "Почему это важно", "Можно воспроизвести запуск, посмотреть параметры, выбранные чанки, ошибки extractors и итоговые таблицы.", 1.05, 5.2, 11.1, 0.9, { accent: C.green });
+  card(s, "Почему это важно", "Результат можно не только скачать, но и восстановить: параметры запуска, выбранные чанки, ошибки и итоговые таблицы лежат рядом.", 1.05, 5.2, 11.1, 0.9, { accent: C.green });
 }
 
 // 16
 {
-  const s = addSlide("Текущее качество инженерной части", "VALIDATION");
-  metric(s, "93", "tests OK", 1.1, 1.8, 2.2, C.green);
-  metric(s, "0", "known secret leaks", 4.0, 1.8, 2.5, C.blue);
-  metric(s, "20", "deck slides", 7.25, 1.8, 2.2, C.amber);
-  metric(s, "200", "local UI OK", 10.0, 1.8, 2.2, C.green);
+  const s = addSlide("Текущее качество инженерной части", "ПРОВЕРКИ");
+  metric(s, "93", "теста проходят", 1.1, 1.8, 2.2, C.green);
+  metric(s, "0", "секретов в файлах", 4.0, 1.8, 2.5, C.blue);
+  metric(s, "20", "слайдов", 7.25, 1.8, 2.2, C.amber);
+  metric(s, "200", "UI отвечает", 10.0, 1.8, 2.2, C.green);
   bulletList(s, [
-    "Unit tests покрывают extraction graph, nano validation, aggregation, retrieval, UI pipeline и CLI artifacts.",
-    "Секреты не коммитятся: `.env` в `.gitignore`, проверка regex перед push.",
+    "Тесты покрывают extraction graph, nano validation, aggregation, retrieval, UI pipeline и CLI artifacts.",
+    "Секреты не коммитятся: `.env` в `.gitignore`, перед push проверяется отсутствие ключей в файлах.",
     "README описывает запуск, API-ключи, UI, CLI, архитектуру и ограничения.",
   ], 1.05, 4.0, 11.0, 1.55, { fontSize: 13.5 });
 }
 
 // 17
 {
-  const s = addSlide("Как читать результат", "RESULT INTERPRETATION");
+  const s = addSlide("Как читать результат", "РУЧНАЯ ПРОВЕРКА");
   flow(s, ["Results", "Evidence", "Rejected", "Conflicts", "Agents"], 0.85, 1.55, 11.65, 0.7);
-  card(s, "Results", "Основная таблица: материал или SMILES, свойство, значение, единица измерения, source_type и quality_score.", 0.9, 2.85, 3.65, 1.45, { accent: C.blue });
-  card(s, "Evidence", "Проверочный слой: полный фрагмент текста, из которого была получена выбранная строка.", 4.85, 2.85, 3.65, 1.45, { accent: C.green });
-  card(s, "Rejected", "Контроль качества: строки, которые модель нашла, но схема, формула, unit или sanity-check их отклонили.", 8.8, 2.85, 3.65, 1.45, { accent: C.red });
-  card(s, "Conflicts + Agents", "Conflicts показывают расхождения значений, Agents объясняет путь данных через этапы pipeline.", 2.1, 5.05, 9.1, 0.95, { accent: C.amber });
+  card(s, "Results", "То, что система считает готовым результатом: объект, свойство, значение, unit, источник и оценка качества.", 0.9, 2.85, 3.65, 1.45, { accent: C.blue });
+  card(s, "Evidence", "Фрагмент статьи, который помогает быстро проверить выбранную строку руками.", 4.85, 2.85, 3.65, 1.45, { accent: C.green });
+  card(s, "Rejected", "То, что модель предложила, но система не пропустила из-за схемы, формулы, unit или sanity-check.", 8.8, 2.85, 3.65, 1.45, { accent: C.red });
+  card(s, "Conflicts + Agents", "Conflicts показывают спорные значения, Agents объясняет, через какие этапы прошла статья.", 2.1, 5.05, 9.1, 0.95, { accent: C.amber });
 }
 
 // 18
 {
-  const s = addSlide("Ограничения и честные риски", "RISKS");
-  card(s, "PDF parsing", "Сложные PDF и отсутствие Ghostscript могут снижать качество таблиц. Есть fallback, но не магия.", 0.9, 1.55, 3.7, 1.55, { accent: C.amber });
-  card(s, "LLM variability", "HF/OpenRouter модели могут возвращать неполные поля. Сейчас такие строки попадают в Rejected.", 4.85, 1.55, 3.7, 1.55, { accent: C.red });
-  card(s, "Vision", "CV зависит от качества страниц, scale bar и material hint. Ошибки явно логируются.", 8.8, 1.55, 3.7, 1.55, { accent: C.blue });
-  card(s, "Как управляем риском", "Evidence, rejected rows, conflicts, agent trace, tests и воспроизводимые artifacts делают ошибки видимыми.", 1.05, 4.25, 11.1, 1.15, { accent: C.green });
+  const s = addSlide("Ограничения и честные риски", "РИСКИ");
+  card(s, "PDF parsing", "Сложные PDF и отсутствие Ghostscript могут ухудшать таблицы. Есть fallback, но качество источника всё равно важно.", 0.9, 1.55, 3.7, 1.55, { accent: C.amber });
+  card(s, "LLM variability", "Модели иногда возвращают неполные поля. Такие строки не попадают в clean CSV молча, а уходят в Rejected.", 4.85, 1.55, 3.7, 1.55, { accent: C.red });
+  card(s, "Vision", "CV зависит от качества изображений, scale bar и связи картинки с материалом из текста.", 8.8, 1.55, 3.7, 1.55, { accent: C.blue });
+  card(s, "Как управляем риском", "Evidence, отклонённые строки, конфликты, путь агентов и тесты делают ошибки видимыми и проверяемыми.", 1.05, 4.25, 11.1, 1.15, { accent: C.green });
 }
 
 // 19
 {
-  const s = addSlide("Следующие улучшения", "ROADMAP");
-  card(s, "Benchmark tab", "Загрузка эталонного CSV, precision/recall/F1, missed/extra rows.", 0.9, 1.55, 3.7, 1.55, { accent: C.blue });
-  card(s, "Better repair", "Автоматически восстанавливать пустые formula/unit из evidence и соседних строк.", 4.85, 1.55, 3.7, 1.55, { accent: C.green });
-  card(s, "Vision fallback", "Добавить альтернативный рендер PDF, если PDFium падает.", 8.8, 1.55, 3.7, 1.55, { accent: C.amber });
-  card(s, "Provider presets", "Готовые профили моделей: free/fast/accurate, чтобы пользователю не вводить model id руками.", 0.9, 3.8, 3.7, 1.55, { accent: C.blue });
-  card(s, "Report export", "Единый HTML/Markdown отчет: Results + Evidence + Agents + Manifest.", 4.85, 3.8, 3.7, 1.55, { accent: C.green });
-  card(s, "More domains", "Расширить правила и схемы под другие предметные домены и типы статей.", 8.8, 3.8, 3.7, 1.55, { accent: C.red });
+  const s = addSlide("Что можно усилить дальше", "ДАЛЬШЕ");
+  card(s, "Benchmark tab", "Загрузить эталонный CSV и сразу видеть precision, recall, F1, missed и extra rows.", 0.9, 1.55, 3.7, 1.55, { accent: C.blue });
+  card(s, "Автовосстановление", "Пытаться восстанавливать пустые formula или unit из evidence и соседних строк, прежде чем отправлять строку в Rejected.", 4.85, 1.55, 3.7, 1.55, { accent: C.green });
+  card(s, "Vision fallback", "Добавить второй способ рендера PDF, если основной CV-путь не смог открыть документ.", 8.8, 1.55, 3.7, 1.55, { accent: C.amber });
+  card(s, "Профили моделей", "Сделать готовые режимы: free, fast, accurate, чтобы не вводить model id вручную.", 0.9, 3.8, 3.7, 1.55, { accent: C.blue });
+  card(s, "Единый отчёт", "Экспортировать HTML/Markdown-отчёт: Results, Evidence, Agents, Manifest и предупреждения.", 4.85, 3.8, 3.7, 1.55, { accent: C.green });
+  card(s, "Больше доменов", "Расширить правила и схемы под другие предметные области и типы статей.", 8.8, 3.8, 3.7, 1.55, { accent: C.red });
 }
 
 // 20
 {
-  const s = addSlide("Финальный вывод", "TAKEAWAY");
+  const s = addSlide("Финальный вывод", "ВЫВОД");
   text(s, "Проект превращает PDF-статью в проверяемый CSV, а не просто в ответ LLM.", 1.0, 1.65, 11.3, 0.65, {
     fontFace: "Aptos Display",
     fontSize: 25,
@@ -490,7 +490,7 @@ function metric(slide, value, label, x, y, w, color = C.blue) {
     align: "center",
     color: C.ink,
   });
-  flow(s, ["Simple UI", "Multi-agent trace", "Validators", "Evidence", "Clean CSV"], 1.15, 3.1, 11.0, 0.75, [C.blue2, C.green2, C.amber2, C.light, C.blue2]);
+  flow(s, ["Простой UI", "Путь агентов", "Проверки", "Evidence", "Чистый CSV"], 1.15, 3.1, 11.0, 0.75, [C.blue2, C.green2, C.amber2, C.light, C.blue2]);
   card(s, "Главная ценность", "Система делает извлечение данных прозрачным: видно, что принято, что отклонено, почему и из какого фрагмента статьи.", 1.2, 4.85, 10.9, 1.2, { accent: C.blue });
 }
 
