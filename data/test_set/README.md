@@ -1,4 +1,4 @@
-# ChemX Test Set
+# Benchmark Test Set
 
 This directory is the local cache for benchmark inputs used in Step 1.
 
@@ -13,13 +13,12 @@ The generated artifacts are ignored by git because PDFs and benchmark data can b
 or redistribution-restricted. Recreate them locally with:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\download_chemx_test_set.py
+.\.venv\Scripts\python.exe scripts\download_benchmark_test_set.py
 ```
 
 Note: the public Hugging Face layout exposes domain datasets such as
-`ai-chem/Oxazolidinones` and `ai-chem/Benzimidazoles`. The download script keeps
-`ai-chem/chemx` as the requested default and falls back to `ai-chem/<domain>` when
-the aggregate dataset is unavailable. Oxazolidinones currently exposes a `train`
+`ai-chem/Oxazolidinones` and `ai-chem/Benzimidazoles`. By default, the download
+script loads `ai-chem/<domain>`. Oxazolidinones currently exposes a `train`
 split, so the script records the actual split in `manifest.json`.
 
 The Oxazolidinones rows contain DOI/PDF identifiers, not article PDF bytes or

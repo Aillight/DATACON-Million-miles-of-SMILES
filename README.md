@@ -1,4 +1,4 @@
-# DataCon ChemX Agent
+# DataCon Extraction Agent
 
 Локальный multi-agent пайплайн для извлечения химических данных из PDF-статей.
 
