@@ -73,6 +73,44 @@ class NanoAggregationTests(unittest.TestCase):
         )
 
         self.assertEqual(0, len(result.clean))
+        self.assertEqual(1, len(result.rejected))
+        self.assertEqual("missing_or_invalid_required_field", result.rejected.iloc[0]["reason"])
+
+    def test_aggregate_nanozyme_rows_accepts_vision_source(self) -> None:
+        result = aggregate_nanozyme_rows(
+            [
+                {
+                    "material_formula": "Mn3O4",
+                    "property_name": "particle diameter",
+                    "value": 12.5,
+                    "unit": "nm",
+                    "source_type": "vision",
+                }
+            ]
+        )
+
+        self.assertEqual(1, len(result.clean))
+        self.assertEqual("vision", result.clean.iloc[0]["source_type"])
+
+    def test_quality_columns_are_added_to_nano_clean_rows(self) -> None:
+        result = aggregate_nanozyme_rows(
+            [
+                {
+                    "material_formula": "Mn3O4",
+                    "property_name": "particle diameter",
+                    "value": 12.5,
+                    "unit": "nm",
+                    "source_type": "vision",
+                    "evidence": "SEM panel scale bar supports the particle measurement.",
+                }
+            ]
+        )
+
+        row = result.clean.iloc[0]
+        self.assertGreaterEqual(row["quality_score"], 80)
+        self.assertIn("from_vision", row["quality_flags"])
+        self.assertIn("valid_formula", row["quality_flags"])
+        self.assertIn("has_evidence", row["quality_flags"])
 
 
 if __name__ == "__main__":

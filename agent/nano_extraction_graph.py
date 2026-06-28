@@ -12,10 +12,15 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agent.extraction_graph import (
     DEFAULT_HUGGINGFACE_MODEL,
+    DEFAULT_OPENROUTER_BASE_URL,
+    DEFAULT_OPENROUTER_MODEL,
     ExtractionPromptContext,
     append_unique,
+    build_openrouter_headers,
+    call_openrouter_json_completion,
     extract_first_json_object,
     extract_huggingface_message_text,
+    resolve_openrouter_token,
     resolve_huggingface_token,
     safe_exception_message,
     strip_markdown_json_fence,
@@ -146,6 +151,38 @@ PERIODIC_TABLE = {
 SUBSCRIPT_TRANSLATION = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
 FORMULA_TOKEN_RE = re.compile(r"([A-Z][a-z]?)(\d+(?:\.\d+)?)?")
 FORMULA_CANDIDATE_RE = re.compile(r"\b(?:[A-Z][a-z]?\s*\d*(?:\.\d+)?\s*){2,}\b")
+CATALYST_LABEL_RE = re.compile(r"[-/@]|SBA|CNT|CNF|MOF|ZIF|SiO2|Al2O3|TiO2", re.IGNORECASE)
+ALLOWED_NANO_PROPERTY_TOKENS = (
+    "size",
+    "diameter",
+    "radius",
+    "length",
+    "width",
+    "hydrodynamic",
+    "zeta",
+    "km",
+    "vmax",
+    "kcat",
+    "activity",
+    "lod",
+    "limit",
+    "range",
+    "ic50",
+    "viability",
+    "cytotoxicity",
+    "ph",
+    "temperature",
+    "recovery",
+    "rsd",
+    "surface area",
+    "bet",
+    "pore",
+    "rate",
+    "velocity",
+    "yield",
+    "conversion",
+    "selectivity",
+)
 
 
 class ExtractedNanozymeProperty(BaseModel):
@@ -175,6 +212,7 @@ class NanoExtractionGraphState(TypedDict, total=False):
     chunk_text: str
     extracted_objects: list[dict[str, Any]]
     validated_objects: list[dict[str, Any]]
+    rejected_objects: list[dict[str, Any]]
     error_log: list[str]
     warnings: list[str]
     valid: bool
@@ -183,7 +221,10 @@ class NanoExtractionGraphState(TypedDict, total=False):
     status: Literal["pending", "valid", "invalid", "failed"]
 
 
-NanoExtractorFn = Callable[[ExtractionPromptContext], NanozymeExtractionBatch | list[ExtractedNanozymeProperty] | dict[str, Any]]
+NanoExtractorFn = Callable[
+    [ExtractionPromptContext],
+    NanozymeExtractionBatch | list[ExtractedNanozymeProperty | dict[str, Any]] | dict[str, Any],
+]
 
 
 @dataclass(frozen=True)
@@ -201,6 +242,8 @@ def build_nanozyme_extraction_prompt(context: ExtractionPromptContext) -> str:
         "Extract scalar material or assay properties such as particle diameter, nanoparticle size, "
         "Km, Vmax, limit of detection, linear range endpoints, optimum pH, optimum temperature, "
         "recovery, and RSD.\n"
+        "For catalyst and nanocatalyst review articles, also extract process metrics such as product yield, "
+        "conversion, and selectivity when they are tied to a material/catalyst.\n"
         "Do not extract ordinary reagents, solvents, vendor names, figure numbers, references, or citations.\n"
         "Use the material formula for the active nanozyme material, for example Mn3O4, Fe3O4, V2O5, Cu1.8S.\n"
         "If a range is reported, return separate rows for lower and upper endpoints with property_name "
@@ -240,6 +283,7 @@ def run_nanozyme_extraction(
             "chunk_text": chunk_text,
             "extracted_objects": [],
             "validated_objects": [],
+            "rejected_objects": [],
             "error_log": [],
             "warnings": [],
             "valid": False,
@@ -262,7 +306,7 @@ def make_huggingface_nanozyme_extractor(
 
         client = InferenceClient(model=model, token=resolved_token)
 
-    def extractor(context: ExtractionPromptContext) -> NanozymeExtractionBatch:
+    def extractor(context: ExtractionPromptContext) -> dict[str, Any]:
         response = call_huggingface_nanozyme_completion(
             client=client,
             model=model,
@@ -271,8 +315,41 @@ def make_huggingface_nanozyme_extractor(
             token=resolved_token,
         )
         text = extract_huggingface_message_text(response)
-        payload = parse_nanozyme_batch_json(text)
-        return NanozymeExtractionBatch.model_validate(payload)
+        return parse_nanozyme_batch_json(text)
+
+    return extractor
+
+
+def make_openrouter_nanozyme_extractor(
+    model: str = DEFAULT_OPENROUTER_MODEL,
+    client: Any | None = None,
+    max_output_tokens: int = 2000,
+    token: str | None = None,
+) -> NanoExtractorFn:
+    resolved_token = resolve_openrouter_token(token)
+    if client is None:
+        if not resolved_token:
+            raise ValueError("OPENROUTER_API_KEY is required for OpenRouter nanozyme extraction.")
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=resolved_token,
+            base_url=DEFAULT_OPENROUTER_BASE_URL,
+            default_headers=build_openrouter_headers(),
+        )
+
+    def extractor(context: ExtractionPromptContext) -> dict[str, Any]:
+        schema = NanozymeExtractionBatch.model_json_schema()
+        text = call_openrouter_json_completion(
+            client=client,
+            model=model,
+            prompt=build_huggingface_nanozyme_prompt(context, schema),
+            schema=schema,
+            schema_name="nanozyme_extraction_batch",
+            max_output_tokens=max_output_tokens,
+            token=resolved_token,
+        )
+        return parse_nanozyme_batch_json(text)
 
     return extractor
 
@@ -333,10 +410,11 @@ def nano_extractor_node(state: NanoExtractionGraphState, extractor: NanoExtracto
         attempt=attempt,
     )
     try:
-        batch = normalize_nano_extractor_output(extractor(context))
+        batch, rejected_objects = normalize_nano_extractor_output_detailed(extractor(context))
     except (TypeError, ValidationError, ValueError, RuntimeError) as exc:
         return {
             "extracted_objects": [],
+            "rejected_objects": list(state.get("rejected_objects", [])),
             "attempts": attempt,
             "valid": False,
             "status": "failed",
@@ -345,6 +423,7 @@ def nano_extractor_node(state: NanoExtractionGraphState, extractor: NanoExtracto
 
     return {
         "extracted_objects": [row.model_dump() for row in batch.rows],
+        "rejected_objects": list(state.get("rejected_objects", [])) + rejected_objects,
         "attempts": attempt,
         "valid": False,
         "status": "pending",
@@ -362,10 +441,11 @@ def nano_critic_node(state: NanoExtractionGraphState) -> NanoExtractionGraphStat
         }
 
     rows = [ExtractedNanozymeProperty.model_validate(row) for row in state.get("extracted_objects", [])]
-    validated_rows, errors, warnings = validate_and_normalize_nanozyme_rows(rows)
+    validated_rows, errors, warnings, rejected_rows = validate_and_normalize_nanozyme_rows_detailed(rows)
     valid = not errors
     return {
         "validated_objects": [row.model_dump() for row in validated_rows],
+        "rejected_objects": list(state.get("rejected_objects", [])) + rejected_rows,
         "error_log": append_unique(state.get("error_log", []), *errors),
         "warnings": append_unique(state.get("warnings", []), *warnings),
         "valid": valid,
@@ -382,15 +462,39 @@ def should_retry_nano(state: NanoExtractionGraphState) -> Literal["retry", "done
 
 
 def normalize_nano_extractor_output(
-    output: NanozymeExtractionBatch | list[ExtractedNanozymeProperty] | dict[str, Any],
+    output: NanozymeExtractionBatch | list[ExtractedNanozymeProperty | dict[str, Any]] | dict[str, Any],
 ) -> NanozymeExtractionBatch:
+    batch, _rejected = normalize_nano_extractor_output_detailed(output)
+    return batch
+
+
+def normalize_nano_extractor_output_detailed(
+    output: NanozymeExtractionBatch | list[ExtractedNanozymeProperty | dict[str, Any]] | dict[str, Any],
+) -> tuple[NanozymeExtractionBatch, list[dict[str, Any]]]:
     if isinstance(output, NanozymeExtractionBatch):
-        return output
+        return output, []
     if isinstance(output, list):
-        return NanozymeExtractionBatch(rows=[ExtractedNanozymeProperty.model_validate(row) for row in output])
+        return build_nano_batch_from_rows(output)
     if isinstance(output, dict):
-        return NanozymeExtractionBatch.model_validate(normalize_nano_payload(output))
+        payload = normalize_nano_payload(output)
+        rows = payload.get("rows")
+        if not isinstance(rows, list):
+            raise ValueError("Nanozyme extractor JSON payload must contain a rows array.")
+        return build_nano_batch_from_rows(rows)
     raise TypeError(f"Unsupported nano extractor output type: {type(output)!r}")
+
+
+def build_nano_batch_from_rows(
+    rows: list[ExtractedNanozymeProperty | dict[str, Any]],
+) -> tuple[NanozymeExtractionBatch, list[dict[str, Any]]]:
+    valid_rows: list[ExtractedNanozymeProperty] = []
+    rejected_rows: list[dict[str, Any]] = []
+    for index, row in enumerate(rows, start=1):
+        try:
+            valid_rows.append(ExtractedNanozymeProperty.model_validate(row))
+        except ValidationError as exc:
+            rejected_rows.append(build_rejected_nano_payload(row, index=index, reason=format_validation_error(exc)))
+    return NanozymeExtractionBatch(rows=valid_rows), rejected_rows
 
 
 def parse_nanozyme_batch_json(text: str) -> dict[str, Any]:
@@ -442,41 +546,157 @@ def normalize_nano_row(row: dict[str, Any]) -> dict[str, Any]:
 def validate_and_normalize_nanozyme_rows(
     rows: list[ExtractedNanozymeProperty],
 ) -> tuple[list[ValidatedNanozymeProperty], list[str], list[str]]:
+    validated, errors, warnings, _rejected = validate_and_normalize_nanozyme_rows_detailed(rows)
+    return validated, errors, warnings
+
+
+def validate_and_normalize_nanozyme_rows_detailed(
+    rows: list[ExtractedNanozymeProperty],
+) -> tuple[list[ValidatedNanozymeProperty], list[str], list[str], list[dict[str, Any]]]:
     validated: list[ValidatedNanozymeProperty] = []
     errors: list[str] = []
     warnings: list[str] = []
+    rejected: list[dict[str, Any]] = []
     seen_keys: set[tuple[str, str, str, str, str]] = set()
 
     for index, row in enumerate(rows, start=1):
         formula_validation = validate_material_formula(row.material_formula)
+        canonical_property, property_errors = validate_nanozyme_property_name(row.property_name)
         row_errors = [
             f"row {index} material_id={row.material_id}: {error}" for error in formula_validation.errors
         ]
         row_errors.extend(
             f"row {index} material_id={row.material_id}: {error}" for error in sanity_check_nanozyme_value(row)
         )
+        if property_errors:
+            reason = "; ".join(
+                f"row {index} material_id={row.material_id}: {error}" for error in property_errors
+            )
+            warnings.append(reason)
+            rejected.append(build_rejected_nano_row(row, index=index, reason=reason))
+            continue
         if row_errors:
             errors.extend(row_errors)
+            rejected.append(build_rejected_nano_row(row, index=index, reason="; ".join(row_errors)))
             continue
 
         key = (
             formula_validation.normalized_formula,
-            normalize_text(row.property_name).lower(),
+            normalize_text(canonical_property).lower(),
             normalize_text(row.unit).lower(),
             normalize_text(row.assay).lower(),
             normalize_text(row.condition).lower(),
         )
         if key in seen_keys:
-            warnings.append(
-                f"row {index} material_id={row.material_id}: duplicate {row.property_name} for "
+            reason = (
+                f"row {index} material_id={row.material_id}: duplicate {canonical_property} for "
                 f"{formula_validation.normalized_formula} skipped"
             )
+            warnings.append(reason)
+            rejected.append(build_rejected_nano_row(row, index=index, reason=reason))
             continue
 
         seen_keys.add(key)
-        validated.append(ValidatedNanozymeProperty(**row.model_dump(), normalized_formula=formula_validation.normalized_formula))
+        row_payload = row.model_dump()
+        row_payload["property_name"] = canonical_property
+        validated.append(ValidatedNanozymeProperty(**row_payload, normalized_formula=formula_validation.normalized_formula))
 
-    return validated, errors, warnings
+    return validated, errors, warnings, rejected
+
+
+def validate_nanozyme_property_name(property_name: str) -> tuple[str, list[str]]:
+    text = normalize_text(property_name)
+    normalized = re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    if not normalized:
+        return text, ["property_name is empty"]
+    if not any(token in normalized for token in ALLOWED_NANO_PROPERTY_TOKENS):
+        return text, [f"property_name {property_name!r} is not an allowed nanozyme endpoint"]
+    return canonical_nanozyme_property_name(text), []
+
+
+def canonical_nanozyme_property_name(property_name: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", " ", property_name.lower()).strip()
+    suffix = ""
+    if normalized.endswith(" lower"):
+        normalized = normalized[: -len(" lower")].strip()
+        suffix = "_lower"
+    elif normalized.endswith(" upper"):
+        normalized = normalized[: -len(" upper")].strip()
+        suffix = "_upper"
+
+    if "vmax" in normalized:
+        return "Vmax" + suffix
+    if "kcat" in normalized:
+        return "kcat" + suffix
+    if re.search(r"\bkm\b", normalized):
+        return "Km" + suffix
+    if "zeta" in normalized:
+        return "zeta potential" + suffix
+    if "ic50" in normalized:
+        return "IC50" + suffix
+    if "viability" in normalized:
+        return "cell viability" + suffix
+    if "cytotoxic" in normalized:
+        return "cytotoxicity" + suffix
+    if "diameter" in normalized:
+        return "particle diameter" + suffix
+    if "hydrodynamic" in normalized:
+        return "hydrodynamic size" + suffix
+    if "size" in normalized:
+        return "particle size" + suffix
+    if "surface area" in normalized or "bet" in normalized:
+        return "BET surface area" + suffix
+    if "limit" in normalized or "lod" in normalized:
+        return "limit of detection" + suffix
+    if "range" in normalized:
+        return "linear range" + suffix
+    if "ph" in normalized:
+        return "optimum pH" + suffix
+    if "temperature" in normalized or "temp" in normalized:
+        return "optimum temperature" + suffix
+    if "rsd" in normalized:
+        return "RSD" + suffix
+    if "activity" in normalized:
+        return "activity" + suffix
+    if "yield" in normalized:
+        return property_name.strip()
+    if "conversion" in normalized:
+        return property_name.strip()
+    if "selectivity" in normalized:
+        return property_name.strip()
+    return property_name.strip()
+
+
+def build_rejected_nano_row(row: ExtractedNanozymeProperty, index: int, reason: str) -> dict[str, Any]:
+    payload = row.model_dump()
+    payload.update(
+        {
+            "row_index": index,
+            "reason": reason,
+            "validator": "nano_critic",
+        }
+    )
+    return payload
+
+
+def build_rejected_nano_payload(row: Any, index: int, reason: str) -> dict[str, Any]:
+    payload = normalize_nano_row(row) if isinstance(row, dict) else {}
+    payload.update(
+        {
+            "row_index": index,
+            "reason": f"row {index}: {reason}",
+            "validator": "nano_extractor_schema",
+        }
+    )
+    return payload
+
+
+def format_validation_error(error: ValidationError) -> str:
+    messages: list[str] = []
+    for item in error.errors():
+        field = ".".join(str(part) for part in item.get("loc", [])) or "row"
+        messages.append(f"{field}: {item.get('msg', 'invalid value')}")
+    return "; ".join(messages)
 
 
 def validate_material_formula(formula: str) -> FormulaValidation:
@@ -507,7 +727,21 @@ def validate_material_formula(formula: str) -> FormulaValidation:
     if remainder:
         errors.append(f"unparsed formula fragment {remainder!r} in formula {formula!r}")
 
+    if errors and looks_like_catalyst_label(normalized):
+        return FormulaValidation(normalized_formula=normalized, errors=[])
+
     return FormulaValidation(normalized_formula=normalized, errors=errors)
+
+
+def looks_like_catalyst_label(normalized_formula: str) -> bool:
+    if not CATALYST_LABEL_RE.search(normalized_formula):
+        return False
+    known_elements = {
+        match.group(1)
+        for match in FORMULA_TOKEN_RE.finditer(normalized_formula)
+        if match.group(1) in PERIODIC_TABLE
+    }
+    return bool(known_elements)
 
 
 def validate_formula_with_pymatgen(formula: str) -> FormulaValidation | None:

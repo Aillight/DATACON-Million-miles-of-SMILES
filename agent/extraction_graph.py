@@ -4,6 +4,8 @@ import json
 import os
 import re
 from collections.abc import Callable
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -12,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 MAX_EXTRACTION_ATTEMPTS = 3
 DEFAULT_HUGGINGFACE_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_OPENROUTER_MODEL = "openai/gpt-4.1-mini"
 
 
 class ExtractedProperty(BaseModel):
@@ -115,11 +119,13 @@ def make_openai_structured_extractor(
     model: str = "gpt-4.1-mini",
     client: Any | None = None,
     max_output_tokens: int = 2000,
+    token: str | None = None,
 ) -> ExtractorFn:
     if client is None:
         from openai import OpenAI
 
-        client = OpenAI()
+        resolved_token = resolve_openai_token(token)
+        client = OpenAI(api_key=resolved_token) if resolved_token else OpenAI()
 
     def extractor(context: ExtractionPromptContext) -> ExtractionBatch:
         response = client.responses.parse(
@@ -133,6 +139,42 @@ def make_openai_structured_extractor(
         if parsed is None:
             raise ValueError("OpenAI structured response did not include output_parsed.")
         return ExtractionBatch.model_validate(parsed)
+
+    return extractor
+
+
+def make_openrouter_structured_extractor(
+    model: str = DEFAULT_OPENROUTER_MODEL,
+    client: Any | None = None,
+    max_output_tokens: int = 2000,
+    token: str | None = None,
+    base_url: str = DEFAULT_OPENROUTER_BASE_URL,
+) -> ExtractorFn:
+    resolved_token = resolve_openrouter_token(token)
+    if client is None:
+        if not resolved_token:
+            raise ValueError("OPENROUTER_API_KEY is required for OpenRouter extraction.")
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=resolved_token,
+            base_url=base_url,
+            default_headers=build_openrouter_headers(),
+        )
+
+    def extractor(context: ExtractionPromptContext) -> ExtractionBatch:
+        schema = ExtractionBatch.model_json_schema()
+        text = call_openrouter_json_completion(
+            client=client,
+            model=model,
+            prompt=build_huggingface_extraction_prompt(context, schema),
+            schema=schema,
+            schema_name="extraction_batch",
+            max_output_tokens=max_output_tokens,
+            token=resolved_token,
+        )
+        payload = parse_extraction_batch_json(text)
+        return ExtractionBatch.model_validate(payload)
 
     return extractor
 
@@ -210,6 +252,78 @@ def build_huggingface_extraction_prompt(context: ExtractionPromptContext, schema
         f"{json.dumps(schema, ensure_ascii=False)}\n\n"
         "Do not include markdown fences, commentary, citations, or explanatory text."
     )
+
+
+def call_openrouter_json_completion(
+    client: Any,
+    model: str,
+    prompt: str,
+    schema: dict[str, Any],
+    schema_name: str,
+    max_output_tokens: int,
+    token: str | None = None,
+) -> str:
+    messages = [
+        {
+            "role": "system",
+            "content": "Return one valid JSON object only. Do not include markdown fences or commentary.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    kwargs = {
+        "messages": messages,
+        "model": model,
+        "max_tokens": max_output_tokens,
+        "temperature": 0,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema_name,
+                "strict": True,
+                "schema": schema,
+            },
+        },
+    }
+    try:
+        response = client.chat.completions.create(**kwargs)
+    except Exception as first_exc:
+        kwargs["response_format"] = {"type": "json_object"}
+        try:
+            response = client.chat.completions.create(**kwargs)
+        except Exception as second_exc:
+            raise RuntimeError(
+                "OpenRouter extraction request failed: "
+                f"{type(second_exc).__name__}: {safe_exception_message(second_exc, token)}"
+            ) from first_exc
+    return extract_chat_message_text(response)
+
+
+def build_openrouter_headers() -> dict[str, str]:
+    load_local_env()
+    headers: dict[str, str] = {}
+    site_url = os.getenv("OPENROUTER_SITE_URL")
+    app_name = os.getenv("OPENROUTER_APP_NAME") or os.getenv("OPENROUTER_APP_TITLE")
+    if site_url:
+        headers["HTTP-Referer"] = site_url
+    if app_name:
+        headers["X-Title"] = app_name
+    return headers
+
+
+def extract_chat_message_text(response: Any) -> str:
+    choices = get_response_value(response, "choices")
+    if choices:
+        choice = choices[0]
+        message = get_response_value(choice, "message")
+        content = get_response_value(message, "content") if message is not None else None
+        if content:
+            return str(content)
+        text = get_response_value(choice, "text")
+        if text:
+            return str(text)
+    if isinstance(response, str):
+        return response
+    raise ValueError("Chat completion response did not contain message content.")
 
 
 def extract_huggingface_message_text(response: Any) -> str:
@@ -313,13 +427,30 @@ def get_response_value(value: Any, key: str) -> Any:
 
 
 def resolve_huggingface_token(token: str | None = None) -> str | None:
+    return resolve_token_from_env(("HF_TOKEN", "HUGGINGFACEHUB_API_TOKEN", "HUGGING_FACE_HUB_TOKEN"), token=token)
+
+
+def resolve_openai_token(token: str | None = None) -> str | None:
+    return resolve_token_from_env(("OPENAI_API_KEY",), token=token)
+
+
+def resolve_openrouter_token(token: str | None = None) -> str | None:
+    return resolve_token_from_env(("OPENROUTER_API_KEY", "OPENROUTER_TOKEN"), token=token)
+
+
+def resolve_token_from_env(names: tuple[str, ...], token: str | None = None) -> str | None:
     if token:
         return token
 
-    for name in ("HF_TOKEN", "HUGGINGFACEHUB_API_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+    load_local_env()
+    for name in names:
         value = os.getenv(name)
         if value:
             return value
+
+    streamlit_value = resolve_streamlit_secret(names)
+    if streamlit_value:
+        return streamlit_value
 
     if os.name != "nt":
         return None
@@ -327,7 +458,7 @@ def resolve_huggingface_token(token: str | None = None) -> str | None:
         import winreg
 
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-            for name in ("HF_TOKEN", "HUGGINGFACEHUB_API_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+            for name in names:
                 try:
                     value, _ = winreg.QueryValueEx(key, name)
                 except OSError:
@@ -335,6 +466,40 @@ def resolve_huggingface_token(token: str | None = None) -> str | None:
                 if value:
                     return str(value)
     except OSError:
+        return None
+    return None
+
+
+@lru_cache(maxsize=1)
+def load_local_env() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    project_root = Path(__file__).resolve().parents[1]
+    load_dotenv(project_root / ".env", override=False)
+
+
+def resolve_streamlit_secret(names: tuple[str, ...]) -> str | None:
+    try:
+        import streamlit as st
+    except Exception:
+        return None
+
+    try:
+        secrets = st.secrets
+        for name in names:
+            value = secrets.get(name)
+            if value:
+                return str(value)
+        api_section = secrets.get("api") or secrets.get("llm")
+        if isinstance(api_section, dict):
+            for name in names:
+                value = api_section.get(name)
+                if value:
+                    return str(value)
+    except Exception:
         return None
     return None
 
