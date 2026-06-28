@@ -15,12 +15,21 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from agent.extraction_graph import (
     DEFAULT_HUGGINGFACE_MODEL,
+    DEFAULT_OPENROUTER_MODEL,
     ExtractorFn,
     make_huggingface_structured_extractor,
     make_openai_structured_extractor,
+    make_openrouter_structured_extractor,
+    load_local_env,
+    resolve_openrouter_token,
     resolve_huggingface_token,
 )
-from agent.nano_extraction_graph import NanoExtractorFn, make_huggingface_nanozyme_extractor
+from agent.nano_extraction_graph import (
+    NanoExtractorFn,
+    make_huggingface_nanozyme_extractor,
+    make_openrouter_nanozyme_extractor,
+)
+from backend.retrieval import DEFAULT_HF_EMBEDDING_MODEL, make_huggingface_embedding_function
 from backend.vision.cv_recognition import write_particle_summary_csv, write_vision_results_json
 from ui.pipeline import ArticlePipelineResult, is_nanozyme_domain, run_pdf_pipeline
 
@@ -37,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         use_openai=args.use_openai,
         domain=args.domain,
         hf_model=args.hf_model,
+        openrouter_model=args.openrouter_model,
         openai_model=args.openai_model,
         max_output_tokens=args.max_output_tokens,
     )
@@ -53,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
         vision_scale_label=args.vision_scale_label,
         vision_max_pages=args.vision_max_pages,
         vision_dpi=args.vision_dpi,
+        retrieval_mode=args.retrieval,
+        embedding_fn=build_embedding_fn(args.retrieval, args.embedding_model),
     )
     artifacts = write_pipeline_outputs(result, output_dir)
 
@@ -64,12 +76,14 @@ def main(argv: list[str] | None = None) -> int:
     print(f"validated={result.validated_count}")
     print(f"clean_rows={len(result.clean)}")
     print(f"conflicts={len(result.conflicts)}")
+    print(f"rejected={len(result.rejected)}")
     for name, path in artifacts.items():
         print(f"{name}={path}")
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
+    load_local_env()
     parser = argparse.ArgumentParser(description="Run the local article extraction pipeline for one PDF.")
     parser.add_argument("pdf", type=Path, help="Path to a PDF article.")
     parser.add_argument("--domain", default=DEFAULT_DOMAIN, help="Extraction domain label.")
@@ -78,14 +92,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-attempts", type=int, default=3, help="Maximum LangGraph retry attempts per chunk.")
     parser.add_argument(
         "--extractor",
-        choices=("auto", "empty", "hf", "openai"),
+        choices=("auto", "empty", "hf", "openrouter", "openai"),
         default="auto",
-        help="Extractor backend. auto uses Hugging Face when HF_TOKEN is available, otherwise empty.",
+        help="Extractor backend. auto uses Hugging Face, then OpenRouter, then empty.",
     )
     parser.add_argument(
         "--hf-model",
         default=os.getenv("HF_MODEL", DEFAULT_HUGGINGFACE_MODEL),
         help="Hugging Face open-weight model.",
+    )
+    parser.add_argument(
+        "--openrouter-model",
+        default=os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL),
+        help="OpenRouter model id for --extractor openrouter.",
     )
     parser.add_argument(
         "--use-openai",
@@ -98,6 +117,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vision-scale-label", help="Manual scale label, for example '100 nm'.")
     parser.add_argument("--vision-max-pages", type=int, default=1)
     parser.add_argument("--vision-dpi", type=int, default=200)
+    parser.add_argument(
+        "--retrieval",
+        choices=("tfidf", "hybrid"),
+        default="tfidf",
+        help="Chunk retrieval strategy. hybrid uses Hugging Face embeddings when HF_TOKEN is available.",
+    )
+    parser.add_argument(
+        "--embedding-model",
+        default=os.getenv("HF_EMBEDDING_MODEL", DEFAULT_HF_EMBEDDING_MODEL),
+        help="Hugging Face feature-extraction model for --retrieval hybrid.",
+    )
     return parser
 
 
@@ -108,22 +138,41 @@ def build_extractor(
     hf_model: str,
     openai_model: str,
     max_output_tokens: int,
+    openrouter_model: str = DEFAULT_OPENROUTER_MODEL,
 ) -> ExtractorFn | NanoExtractorFn | None:
     if use_openai:
         extractor = "openai"
     if extractor == "auto":
-        extractor = "hf" if resolve_huggingface_token() else "empty"
+        if resolve_huggingface_token():
+            extractor = "hf"
+        elif resolve_openrouter_token():
+            extractor = "openrouter"
+        else:
+            extractor = "empty"
     if extractor == "empty":
         return None
     if extractor == "hf":
         if is_nanozyme_domain(domain):
             return make_huggingface_nanozyme_extractor(model=hf_model, max_output_tokens=max_output_tokens)
         return make_huggingface_structured_extractor(model=hf_model, max_output_tokens=max_output_tokens)
+    if extractor == "openrouter":
+        if is_nanozyme_domain(domain):
+            return make_openrouter_nanozyme_extractor(model=openrouter_model, max_output_tokens=max_output_tokens)
+        return make_openrouter_structured_extractor(model=openrouter_model, max_output_tokens=max_output_tokens)
     if extractor == "openai":
         if is_nanozyme_domain(domain):
             raise ValueError("OpenAI extractor is not wired for Nanozymes yet. Use --extractor hf or empty.")
         return make_openai_structured_extractor(model=openai_model, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unsupported extractor: {extractor}")
+
+
+def build_embedding_fn(retrieval: str, embedding_model: str):
+    if retrieval != "hybrid":
+        return None
+    token = resolve_huggingface_token()
+    if not token:
+        return None
+    return make_huggingface_embedding_function(model=embedding_model, token=token)
 
 
 def default_output_dir(pdf_path: Path) -> Path:
@@ -135,9 +184,12 @@ def write_pipeline_outputs(result: ArticlePipelineResult, output_dir: Path) -> d
 
     clean_csv = output_dir / "clean.csv"
     conflicts_csv = output_dir / "conflicts.csv"
+    rejected_csv = output_dir / "rejected.csv"
     logs_txt = output_dir / "logs.txt"
     prepared_md = output_dir / "prepared.md"
     chunks_json = output_dir / "chunks.json"
+    retrieval_json = output_dir / "retrieval.json"
+    agent_trace_json = output_dir / "agent_trace.json"
     states_json = output_dir / "extraction_states.json"
     vision_json = output_dir / "vision_results.json"
     vision_csv = output_dir / "vision_summary.csv"
@@ -145,10 +197,19 @@ def write_pipeline_outputs(result: ArticlePipelineResult, output_dir: Path) -> d
 
     result.clean.to_csv(clean_csv, index=False)
     result.conflicts.to_csv(conflicts_csv, index=False)
+    result.rejected.to_csv(rejected_csv, index=False)
     logs_txt.write_text("\n".join(result.logs), encoding="utf-8")
     prepared_md.write_text(result.prepared.markdown, encoding="utf-8")
     chunks_json.write_text(
         json.dumps([chunk.to_dict() for chunk in result.prepared.chunks], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    retrieval_json.write_text(
+        json.dumps([item.to_dict() for item in result.retrieval_results], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    agent_trace_json.write_text(
+        json.dumps(result.agent_trace, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     states_json.write_text(
@@ -162,9 +223,12 @@ def write_pipeline_outputs(result: ArticlePipelineResult, output_dir: Path) -> d
     artifacts = {
         "clean_csv": clean_csv,
         "conflicts_csv": conflicts_csv,
+        "rejected_csv": rejected_csv,
         "logs": logs_txt,
         "prepared_markdown": prepared_md,
         "chunks_json": chunks_json,
+        "retrieval_json": retrieval_json,
+        "agent_trace_json": agent_trace_json,
         "states_json": states_json,
         "manifest": manifest_json,
     }
@@ -186,11 +250,15 @@ def build_manifest(result: ArticlePipelineResult, artifacts: dict[str, Path]) ->
         "parser": result.prepared.parser,
         "table_count": result.table_count,
         "chunk_count": len(result.prepared.chunks),
+        "retrieved_chunk_count": len(result.retrieval_results),
+        "retrieved_chunks": [item.chunk.index for item in result.retrieval_results],
+        "agent_steps": [step.get("agent") for step in result.agent_trace],
         "processed_chunk_count": len(result.extraction_states),
         "candidate_count": sum(len(state.get("extracted_objects", [])) for state in result.extraction_states),
         "validated_count": result.validated_count,
         "clean_rows": len(result.clean),
         "conflict_rows": len(result.conflicts),
+        "rejected_rows": len(result.rejected),
         "vision_result_count": len(result.vision_results),
         "vision_particle_count": sum(item.particle_summary.count for item in result.vision_results),
         "concentration_mentions": len(result.prepared.concentration_mentions),

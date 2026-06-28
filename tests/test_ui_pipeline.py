@@ -134,6 +134,183 @@ class UiPipelineTests(unittest.TestCase):
         self.assertEqual("Nanozymes", result.domain)
         self.assertEqual(1, len(result.clean))
         self.assertIn("normalized_formula", result.clean.columns)
+        self.assertEqual(
+            ["ParserAgent", "RouterAgent", "RetrievalAgent", "ExtractorValidatorAgent", "AggregatorAgent"],
+            [step["agent"] for step in result.agent_trace],
+        )
+
+    def test_run_pdf_pipeline_uses_retrieval_instead_of_first_chunk(self) -> None:
+        markdown = (
+            "## Results\n\n"
+            "The catalyst was reused in five cycles and the discussion focuses on yield.\n\n"
+            "## Experimental\n\n"
+            "Mn3O4 nanoparticles had a particle diameter of 10 nm with Km 0.027 mM and Vmax 126.7 nM s-1."
+        )
+        processed_texts: list[str] = []
+
+        def extractor_factory(_effective_domain: str):
+            def extractor(context) -> NanozymeExtractionBatch:
+                processed_texts.append(context.chunk_text)
+                if "Mn3O4 nanoparticles" not in context.chunk_text:
+                    return NanozymeExtractionBatch(rows=[])
+                return NanozymeExtractionBatch(
+                    rows=[
+                        {
+                            "material_id": "Mn3O4",
+                            "material_name": "Mn3O4 nanoparticles",
+                            "material_formula": "Mn3O4",
+                            "property_name": "particle diameter",
+                            "value": 10.0,
+                            "unit": "nm",
+                            "assay": "",
+                            "condition": "",
+                        }
+                    ]
+                )
+
+            return extractor
+
+        with patch(
+            "ui.pipeline.parse_pdf_to_markdown",
+            return_value=ParsedDocument(source="paper.pdf", parser="test", markdown=markdown),
+        ):
+            result = run_pdf_pipeline(
+                pdf_path="paper.pdf",
+                filename="paper.pdf",
+                domain="Nanozymes",
+                extractor_factory=extractor_factory,
+                max_chunks=1,
+            )
+
+        self.assertEqual(1, len(processed_texts))
+        self.assertIn("Mn3O4 nanoparticles", processed_texts[0])
+        self.assertEqual([1], [item.chunk.index for item in result.retrieval_results])
+        self.assertEqual(1, len(result.clean))
+
+    def test_run_pdf_pipeline_merges_vision_particle_size_into_nano_results(self) -> None:
+        markdown = "## Results\n\nMn3O4 nanoparticles showed Vmax 126.7 nM s-1."
+
+        def extractor_factory(_effective_domain: str):
+            def extractor(_context) -> NanozymeExtractionBatch:
+                return NanozymeExtractionBatch(
+                    rows=[
+                        {
+                            "material_id": "Mn3O4",
+                            "material_name": "Mn3O4 nanoparticles",
+                            "material_formula": "Mn3O4",
+                            "property_name": "Vmax",
+                            "value": 126.7,
+                            "unit": "nM s-1",
+                            "assay": "oxidase-like",
+                            "condition": "",
+                        }
+                    ]
+                )
+
+            return extractor
+
+        vision_result = VisionAnalysisResult(
+            source="panel.png",
+            image_width=100,
+            image_height=80,
+            panels=[ImagePanel(index=1, bbox=(1, 2, 30, 40), kind="microscopy")],
+            particle_summary=ParticleSummary(count=4, mean_diameter_nm=11.5, mean_diameter_px=6.0),
+        )
+
+        with patch(
+            "ui.pipeline.parse_pdf_to_markdown",
+            return_value=ParsedDocument(source="paper.pdf", parser="test", markdown=markdown),
+        ), patch("ui.pipeline.analyze_pdf_pages", return_value=[vision_result]):
+            result = run_pdf_pipeline(
+                pdf_path="paper.pdf",
+                filename="paper.pdf",
+                domain="Nanozymes",
+                extractor_factory=extractor_factory,
+                max_chunks=1,
+                vision_enabled=True,
+            )
+
+        self.assertEqual(2, len(result.clean))
+        self.assertIn("vision", set(result.clean["source_type"]))
+        vision_row = result.clean[result.clean["source_type"] == "vision"].iloc[0]
+        self.assertEqual("particle diameter", vision_row["property_name"])
+        self.assertEqual(11.5, vision_row["value"])
+
+    def test_run_pdf_pipeline_accepts_process_metric_rows(self) -> None:
+        markdown = "## Results\n\nCuO showed sorbitol yield of 99.1%."
+
+        def extractor_factory(_effective_domain: str):
+            def extractor(_context) -> NanozymeExtractionBatch:
+                return NanozymeExtractionBatch(
+                    rows=[
+                        {
+                            "material_id": "CuO",
+                            "material_name": "CuO",
+                            "material_formula": "CuO",
+                            "property_name": "sorbitol yield",
+                            "value": 99.1,
+                            "unit": "%",
+                            "assay": "",
+                            "condition": "",
+                        }
+                    ]
+                )
+
+            return extractor
+
+        with patch(
+            "ui.pipeline.parse_pdf_to_markdown",
+            return_value=ParsedDocument(source="paper.pdf", parser="test", markdown=markdown),
+        ):
+            result = run_pdf_pipeline(
+                pdf_path="paper.pdf",
+                filename="paper.pdf",
+                domain="Nanozymes",
+                extractor_factory=extractor_factory,
+                max_chunks=1,
+            )
+
+        self.assertEqual(1, len(result.clean))
+        self.assertTrue(result.rejected.empty)
+        self.assertEqual("sorbitol yield", result.clean.iloc[0]["property_name"])
+
+    def test_run_pdf_pipeline_exposes_rejected_nano_rows(self) -> None:
+        markdown = "## Results\n\nCuO showed sorbitol yield of 99.1%."
+
+        def extractor_factory(_effective_domain: str):
+            def extractor(_context) -> NanozymeExtractionBatch:
+                return NanozymeExtractionBatch(
+                    rows=[
+                        {
+                            "material_id": "CuO",
+                            "material_name": "CuO",
+                            "material_formula": "CuO",
+                            "property_name": "random score",
+                            "value": 99.1,
+                            "unit": "%",
+                            "assay": "",
+                            "condition": "",
+                        }
+                    ]
+                )
+
+            return extractor
+
+        with patch(
+            "ui.pipeline.parse_pdf_to_markdown",
+            return_value=ParsedDocument(source="paper.pdf", parser="test", markdown=markdown),
+        ):
+            result = run_pdf_pipeline(
+                pdf_path="paper.pdf",
+                filename="paper.pdf",
+                domain="Nanozymes",
+                extractor_factory=extractor_factory,
+                max_chunks=1,
+            )
+
+        self.assertTrue(result.clean.empty)
+        self.assertEqual(1, len(result.rejected))
+        self.assertIn("not an allowed nanozyme endpoint", result.rejected.iloc[0]["reason"])
 
     def test_article_pipeline_result_validated_count(self) -> None:
         result = ArticlePipelineResult(
@@ -150,6 +327,30 @@ class UiPipelineTests(unittest.TestCase):
         )
 
         self.assertEqual(2, result.validated_count)
+
+    def test_run_pdf_pipeline_records_vision_agent_when_enabled(self) -> None:
+        markdown = "## Results\n\nMn3O4 nanoparticles showed Vmax 126.7 nM s-1."
+
+        def extractor_factory(_effective_domain: str):
+            def extractor(_context) -> NanozymeExtractionBatch:
+                return NanozymeExtractionBatch(rows=[])
+
+            return extractor
+
+        with patch(
+            "ui.pipeline.parse_pdf_to_markdown",
+            return_value=ParsedDocument(source="paper.pdf", parser="test", markdown=markdown),
+        ), patch("ui.pipeline.analyze_pdf_pages", return_value=[]):
+            result = run_pdf_pipeline(
+                pdf_path="paper.pdf",
+                filename="paper.pdf",
+                domain="Nanozymes",
+                extractor_factory=extractor_factory,
+                max_chunks=1,
+                vision_enabled=True,
+            )
+
+        self.assertIn("VisionAgent", [step["agent"] for step in result.agent_trace])
 
     def test_explain_empty_results_suggests_nanozymes_domain_for_nano_text(self) -> None:
         result = ArticlePipelineResult(

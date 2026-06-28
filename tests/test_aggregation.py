@@ -61,6 +61,26 @@ class AggregationTests(unittest.TestCase):
         self.assertEqual("table_priority", result.conflicts.iloc[0]["resolution"])
         self.assertEqual(4.0, result.conflicts.iloc[0]["rejected_value"])
 
+    def test_quality_columns_are_added_to_clean_rows(self) -> None:
+        result = aggregate_extraction_rows(
+            [
+                {
+                    "canonical_smiles": "CCO",
+                    "property_name": "pMIC",
+                    "value": 5.0,
+                    "unit": "pMIC",
+                    "source_type": "docling_table",
+                    "evidence": "Table 1 reports pMIC 5.0 for compound 1.",
+                }
+            ]
+        )
+
+        row = result.clean.iloc[0]
+        self.assertGreaterEqual(row["quality_score"], 90)
+        self.assertIn("from_table", row["quality_flags"])
+        self.assertIn("valid_smiles", row["quality_flags"])
+        self.assertIn("has_evidence", row["quality_flags"])
+
     def test_same_priority_conflict_keeps_first_seen(self) -> None:
         result = aggregate_extraction_rows(
             [

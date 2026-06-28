@@ -42,16 +42,21 @@ class RunArticlePipelineScriptTests(unittest.TestCase):
             manifest = json.loads(artifacts["manifest"].read_text(encoding="utf-8"))
             chunks = json.loads(artifacts["chunks_json"].read_text(encoding="utf-8"))
             states = json.loads(artifacts["states_json"].read_text(encoding="utf-8"))
+            agent_trace = json.loads(artifacts["agent_trace_json"].read_text(encoding="utf-8"))
 
             self.assertTrue(artifacts["clean_csv"].exists())
             self.assertTrue(artifacts["conflicts_csv"].exists())
+            self.assertTrue(artifacts["rejected_csv"].exists())
             self.assertEqual("paper.pdf", manifest["source"])
             self.assertEqual("Oxazolidinones", manifest["domain"])
             self.assertEqual(1, manifest["candidate_count"])
             self.assertEqual(1, manifest["validated_count"])
             self.assertEqual(1, manifest["clean_rows"])
             self.assertEqual(1, manifest["conflict_rows"])
+            self.assertEqual(0, manifest["rejected_rows"])
             self.assertEqual(0, manifest["vision_result_count"])
+            self.assertEqual(["ParserAgent"], manifest["agent_steps"])
+            self.assertEqual("ParserAgent", agent_trace[0]["agent"])
             self.assertEqual("Results", chunks[0]["section_title"])
             self.assertEqual("valid", states[0]["status"])
 
@@ -128,6 +133,16 @@ def make_result() -> ArticlePipelineResult:
         extraction_states=[state],
         clean=clean,
         conflicts=conflicts,
+        agent_trace=[
+            {
+                "agent": "ParserAgent",
+                "role": "Convert PDF into clean article text.",
+                "status": "completed",
+                "summary": "Prepared 1 chunk.",
+                "metrics": {"chunks": 1},
+                "warnings": [],
+            }
+        ],
         logs=["Loaded PDF: paper.pdf"],
     )
 
