@@ -1,4 +1,4 @@
-# DataCon Multi-Agents System
+# DataCon Agents
 
 Локальный multi-agents пайплайн для извлечения химических данных из PDF-статей
 
@@ -128,7 +128,7 @@ ui/
   pipeline.py               full article orchestration
 ```
 
-## Заметки
+## Post scriptum
 
 - Camelot lattice может предупреждать про Ghostscript. Это не блокирует весь pipeline: используется fallback.
 - OpenAI extractor пока подключён только для small molecules. Для Nanozymes используйте Hugging Face или OpenRouter.

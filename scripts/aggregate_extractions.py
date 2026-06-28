@@ -16,7 +16,7 @@ from backend.nano_aggregation import aggregate_nanozyme_rows
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Aggregate extracted ChemX rows into a clean CSV.")
+    parser = argparse.ArgumentParser(description="Aggregate extracted rows into a clean CSV.")
     parser.add_argument("inputs", nargs="+", type=Path, help="Input CSV, JSON, or JSONL files.")
     parser.add_argument("--output", type=Path, default=Path("outputs/extractions/clean.csv"))
     parser.add_argument("--conflicts", type=Path, default=Path("outputs/extractions/conflicts.csv"))
