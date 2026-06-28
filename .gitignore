@@ -60,3 +60,5 @@ logs/
 build/
 dist/
 *.egg-info/
+node_modules/
+presentation_work/
