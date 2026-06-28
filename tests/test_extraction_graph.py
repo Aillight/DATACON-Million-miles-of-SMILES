@@ -9,6 +9,7 @@ from agent.extraction_graph import (
     extract_huggingface_message_text,
     make_huggingface_structured_extractor,
     make_openai_structured_extractor,
+    make_openrouter_structured_extractor,
     parse_extraction_batch_json,
     run_small_molecule_extraction,
     validate_and_canonicalize_rows,
@@ -175,6 +176,36 @@ class ExtractionGraphTests(unittest.TestCase):
 
         self.assertEqual("free-test-model", fake_client.kwargs["model"])
         self.assertEqual({"type": "json_object"}, fake_client.kwargs["response_format"])
+        self.assertEqual("CCO", batch.rows[0].smiles)
+
+    def test_openrouter_structured_extractor_uses_chat_completions_json_schema(self) -> None:
+        class FakeCompletions:
+            def __init__(self) -> None:
+                self.kwargs = {}
+
+            def create(self, **kwargs):
+                self.kwargs = kwargs
+                return SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content=(
+                                    '{"rows":[{"compound_id":"1","smiles":"CCO",'
+                                    '"property_name":"pMIC","value":5.0,"unit":"pMIC"}]}'
+                                )
+                            )
+                        )
+                    ]
+                )
+
+        fake_completions = FakeCompletions()
+        fake_client = SimpleNamespace(chat=SimpleNamespace(completions=fake_completions))
+        extractor = make_openrouter_structured_extractor(model="openrouter-test-model", client=fake_client)
+
+        batch = extractor(ExtractionPromptContext(chunk_text="Compound 1 pMIC 5.0", attempt=1))
+
+        self.assertEqual("openrouter-test-model", fake_completions.kwargs["model"])
+        self.assertEqual("json_schema", fake_completions.kwargs["response_format"]["type"])
         self.assertEqual("CCO", batch.rows[0].smiles)
 
     def test_parse_extraction_batch_json_handles_fenced_output(self) -> None:

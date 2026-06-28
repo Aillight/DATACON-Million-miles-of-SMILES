@@ -1,6 +1,8 @@
+from agent.article_supervisor import AgentTraceStep, ArticleSupervisor
 from agent.core import build_default_orchestrator, run_agent_task
 from agent.extraction_graph import (
     DEFAULT_HUGGINGFACE_MODEL,
+    DEFAULT_OPENROUTER_MODEL,
     ExtractedProperty,
     ExtractionBatch,
     ExtractionPromptContext,
@@ -9,6 +11,8 @@ from agent.extraction_graph import (
     build_small_molecule_extraction_graph,
     make_huggingface_structured_extractor,
     make_openai_structured_extractor,
+    make_openrouter_structured_extractor,
+    resolve_openrouter_token,
     resolve_huggingface_token,
     run_small_molecule_extraction,
 )
@@ -19,6 +23,7 @@ from agent.nano_extraction_graph import (
     build_nanozyme_extraction_prompt,
     build_nanozyme_extraction_graph,
     make_huggingface_nanozyme_extractor,
+    make_openrouter_nanozyme_extractor,
     run_nanozyme_extraction,
     validate_and_normalize_nanozyme_rows,
     validate_material_formula,
@@ -28,7 +33,10 @@ from agent.orchestrator import AgentSpec, AgentState, MASOrchestrator
 __all__ = [
     "AgentSpec",
     "AgentState",
+    "AgentTraceStep",
+    "ArticleSupervisor",
     "DEFAULT_HUGGINGFACE_MODEL",
+    "DEFAULT_OPENROUTER_MODEL",
     "ExtractedProperty",
     "ExtractedNanozymeProperty",
     "ExtractionBatch",
@@ -45,6 +53,9 @@ __all__ = [
     "make_huggingface_structured_extractor",
     "make_huggingface_nanozyme_extractor",
     "make_openai_structured_extractor",
+    "make_openrouter_structured_extractor",
+    "make_openrouter_nanozyme_extractor",
+    "resolve_openrouter_token",
     "resolve_huggingface_token",
     "run_agent_task",
     "run_nanozyme_extraction",

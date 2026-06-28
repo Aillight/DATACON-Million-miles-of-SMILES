@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 
+from agent.article_supervisor import ArticleSupervisor
 from agent.extraction_graph import (
     ExtractionBatch,
     ExtractionGraphState,
@@ -20,9 +21,10 @@ from agent.nano_extraction_graph import (
     run_nanozyme_extraction,
 )
 from backend.aggregation import aggregate_extraction_rows
-from backend.nano_aggregation import aggregate_nanozyme_rows
+from backend.nano_aggregation import REJECTED_COLUMNS, aggregate_nanozyme_rows
 from backend.parsing.pdf_parser import parse_pdf_to_markdown
 from backend.parsing.text_preparation import PreparedDocument, prepare_markdown_for_extraction
+from backend.retrieval import EmbeddingFn, RankedChunk, RetrievalMode, rank_chunks_for_extraction
 from backend.vision.cv_recognition import VisionAnalysisResult, analyze_pdf_pages
 
 
@@ -49,9 +51,12 @@ class ArticlePipelineResult:
     prepared: PreparedDocument
     table_count: int
     extraction_states: list[ExtractionGraphState | NanoExtractionGraphState] = field(default_factory=list)
+    retrieval_results: list[RankedChunk] = field(default_factory=list)
     clean: pd.DataFrame = field(default_factory=pd.DataFrame)
     conflicts: pd.DataFrame = field(default_factory=pd.DataFrame)
+    rejected: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=REJECTED_COLUMNS))
     vision_results: list[VisionAnalysisResult] = field(default_factory=list)
+    agent_trace: list[dict[str, Any]] = field(default_factory=list)
     logs: list[str] = field(default_factory=list)
 
     @property
@@ -71,6 +76,8 @@ def run_pdf_pipeline(
     vision_scale_label: str | None = None,
     vision_max_pages: int = 1,
     vision_dpi: int = 200,
+    retrieval_mode: RetrievalMode = "tfidf",
+    embedding_fn: EmbeddingFn | None = None,
     log: LogFn | None = None,
 ) -> ArticlePipelineResult:
     logs: list[str] = []
@@ -81,6 +88,7 @@ def run_pdf_pipeline(
             log(message)
 
     emit(f"Loaded PDF: {filename}")
+    supervisor = ArticleSupervisor(log=emit)
     parsed = parse_pdf_to_markdown(pdf_path)
     emit(f"Docling/Camelot parsed markdown chars={len(parsed.markdown)} tables={len(parsed.tables)}")
     for warning in parsed.warnings:
@@ -94,6 +102,18 @@ def run_pdf_pipeline(
     )
     emit(f"Prepared text chars={len(prepared.markdown)} chunks={len(prepared.chunks)}")
     emit(f"Concentration mentions={len(prepared.concentration_mentions)}")
+    supervisor.record(
+        "ParserAgent",
+        "Convert PDF into clean article text, tables, and section chunks.",
+        f"Prepared {len(prepared.chunks)} chunks from {len(prepared.markdown)} markdown characters.",
+        metrics={
+            "markdown_chars": len(prepared.markdown),
+            "tables": len(parsed.tables),
+            "chunks": len(prepared.chunks),
+            "concentration_mentions": len(prepared.concentration_mentions),
+        },
+        warnings=list(prepared.warnings),
+    )
 
     extraction_states: list[ExtractionGraphState | NanoExtractionGraphState] = []
     effective_domain = resolve_effective_domain(domain, prepared) if extractor_factory else domain
@@ -105,11 +125,45 @@ def run_pdf_pipeline(
     else:
         extractor_fn = extractor
     extractor_fn = extractor_fn or (empty_nano_extractor if nanozyme_domain else empty_extractor)
-    chunks_to_process = prepared.chunks[:max(0, max_chunks)]
+    supervisor.record(
+        "RouterAgent",
+        "Select the domain-specific extraction graph and validator policy.",
+        f"Using {effective_domain} as the effective domain.",
+        metrics={
+            "selected_domain": domain,
+            "effective_domain": effective_domain,
+            "extractor_kind": "nanozyme" if nanozyme_domain else "small-molecule",
+        },
+    )
+    retrieval_results = rank_chunks_for_extraction(
+        chunks=prepared.chunks,
+        domain=effective_domain,
+        top_k=max_chunks,
+        retrieval_mode=retrieval_mode,
+        embedding_fn=embedding_fn,
+    )
+    chunks_to_process = [item.chunk for item in retrieval_results]
     extraction_kind = "nanozyme" if nanozyme_domain else "small-molecule"
     emit(f"Extractor kind={extraction_kind} input chunks={len(chunks_to_process)}")
+    for item in retrieval_results:
+        emit(
+            f"Retrieval rank={item.rank} chunk={item.chunk.index} "
+            f"score={item.score:.4f} method={item.retrieval_method} terms={','.join(item.matched_terms) or '-'}"
+        )
+    supervisor.record(
+        "RetrievalAgent",
+        "Rank section chunks before sending context to the extractor.",
+        f"Selected {len(chunks_to_process)} chunks with {retrieval_mode} retrieval.",
+        metrics={
+            "retrieval_mode": retrieval_mode,
+            "requested_chunks": max_chunks,
+            "selected_chunks": [item.chunk.index for item in retrieval_results],
+            "selected_count": len(chunks_to_process),
+        },
+    )
 
     extracted_rows: list[dict[str, Any]] = []
+    rejected_rows: list[dict[str, Any]] = []
     for chunk in chunks_to_process:
         if nanozyme_domain:
             state = run_nanozyme_extraction(
@@ -134,6 +188,15 @@ def run_pdf_pipeline(
             validator_name = "Formula/sanity" if nanozyme_domain else "RDKit"
             emit(f"{validator_name}/error: {error}")
 
+        rejected_rows.extend(
+            enrich_rejected_rows(
+                state.get("rejected_objects", []),
+                article_id=filename,
+                chunk_index=chunk.index,
+                evidence=chunk.text,
+            )
+        )
+
         extracted_rows.extend(
             enrich_validated_rows(
                 state.get("validated_objects", []),
@@ -142,9 +205,21 @@ def run_pdf_pipeline(
                 evidence=chunk.text,
             )
         )
-
-    aggregation = aggregate_nanozyme_rows(extracted_rows) if nanozyme_domain else aggregate_extraction_rows(extracted_rows)
-    emit(f"Aggregation clean_rows={len(aggregation.clean)} conflicts={len(aggregation.conflicts)}")
+    extractor_errors = collect_state_errors(extraction_states)
+    supervisor.record(
+        "ExtractorValidatorAgent",
+        "Run the LLM extractor and domain validator retry loop for each selected chunk.",
+        f"Processed {len(extraction_states)} chunks; validated {len(extracted_rows)} rows.",
+        status="warning" if extractor_errors else "completed",
+        metrics={
+            "processed_chunks": len(extraction_states),
+            "candidate_rows": sum(len(state.get("extracted_objects", [])) for state in extraction_states),
+            "validated_rows": len(extracted_rows),
+            "rejected_rows": len(rejected_rows),
+            "attempts": sum(int(state.get("attempts", 0)) for state in extraction_states),
+        },
+        warnings=extractor_errors[:5],
+    )
 
     vision_results: list[VisionAnalysisResult] = []
     if vision_enabled:
@@ -168,6 +243,50 @@ def run_pdf_pipeline(
                 emit(f"Vision warning: {warning}")
         except Exception as exc:
             emit(f"Vision error: {exc}")
+        supervisor.record(
+            "VisionAgent",
+            "Analyze article figures for panels, scale bars, and particle-size measurements.",
+            f"Analyzed {len(vision_results)} figure crops/pages.",
+            status="warning" if collect_vision_warnings(vision_results) else "completed",
+            metrics={
+                "vision_results": len(vision_results),
+                "scale_bars": sum(1 for item in vision_results if item.scale_bar is not None),
+                "particle_count": sum(item.particle_summary.count for item in vision_results),
+            },
+            warnings=collect_vision_warnings(vision_results),
+        )
+
+    if nanozyme_domain and vision_results:
+        vision_rows, vision_rejected = vision_results_to_nano_rows(
+            vision_results,
+            article_id=filename,
+            material_hint=infer_nano_material_hint(extracted_rows),
+        )
+        extracted_rows.extend(vision_rows)
+        rejected_rows.extend(vision_rejected)
+        emit(f"Vision-to-results rows={len(vision_rows)} rejected={len(vision_rejected)}")
+
+    if nanozyme_domain:
+        aggregation = aggregate_nanozyme_rows(extracted_rows)
+        rejected = combine_rejected_rows(rejected_rows, aggregation.rejected)
+    else:
+        aggregation = aggregate_extraction_rows(extracted_rows)
+        rejected = pd.DataFrame(rejected_rows, columns=REJECTED_COLUMNS)
+    emit(
+        f"Aggregation clean_rows={len(aggregation.clean)} "
+        f"conflicts={len(aggregation.conflicts)} rejected={len(rejected)}"
+    )
+    supervisor.record(
+        "AggregatorAgent",
+        "Deduplicate rows, resolve source conflicts, and prepare final CSV tables.",
+        f"Produced {len(aggregation.clean)} clean rows, {len(aggregation.conflicts)} conflicts, {len(rejected)} rejected rows.",
+        status="warning" if len(aggregation.conflicts) or len(rejected) else "completed",
+        metrics={
+            "clean_rows": len(aggregation.clean),
+            "conflicts": len(aggregation.conflicts),
+            "rejected": len(rejected),
+        },
+    )
 
     return ArticlePipelineResult(
         source=filename,
@@ -175,14 +294,35 @@ def run_pdf_pipeline(
         prepared=prepared,
         table_count=len(parsed.tables),
         extraction_states=extraction_states,
+        retrieval_results=retrieval_results,
         clean=aggregation.clean,
         conflicts=aggregation.conflicts,
+        rejected=rejected,
         vision_results=vision_results,
+        agent_trace=supervisor.to_dicts(),
         logs=logs,
     )
 
 
 def enrich_validated_rows(
+    rows: list[dict[str, Any]],
+    article_id: str,
+    chunk_index: int,
+    evidence: str,
+) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for row in rows:
+        enriched_row = dict(row)
+        enriched_row.setdefault("source_type", "text")
+        enriched_row.setdefault("article_id", article_id)
+        enriched_row.setdefault("source_id", f"{article_id}:chunk-{chunk_index}")
+        enriched_row.setdefault("chunk_index", chunk_index)
+        enriched_row.setdefault("evidence", evidence[:1000])
+        enriched.append(enriched_row)
+    return enriched
+
+
+def enrich_rejected_rows(
     rows: list[dict[str, Any]],
     article_id: str,
     chunk_index: int,
@@ -275,11 +415,16 @@ def has_small_molecule_columns(result: ArticlePipelineResult) -> bool:
 
 
 def collect_recent_errors(result: ArticlePipelineResult, limit: int = 3) -> list[str]:
+    errors = collect_state_errors(result.extraction_states)
+    return errors[-limit:]
+
+
+def collect_state_errors(states: list[ExtractionGraphState | NanoExtractionGraphState]) -> list[str]:
     errors: list[str] = []
-    for state in result.extraction_states:
+    for state in states:
         for error in state.get("error_log", []):
             errors.append(str(error))
-    return errors[-limit:]
+    return errors
 
 
 def vision_results_to_rows(results: list[VisionAnalysisResult]) -> list[dict[str, Any]]:
@@ -306,6 +451,86 @@ def vision_results_to_rows(results: list[VisionAnalysisResult]) -> list[dict[str
             }
         )
     return rows
+
+
+def vision_results_to_nano_rows(
+    results: list[VisionAnalysisResult],
+    article_id: str,
+    material_hint: dict[str, str] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rows: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    for index, result in enumerate(results, start=1):
+        summary = result.particle_summary
+        panel = result.panels[0] if result.panels else None
+        source_id = f"{article_id}:vision-{index}"
+        base = {
+            "property_name": "particle diameter",
+            "assay": "CV particle segmentation",
+            "condition": f"mean; {Path(result.source).name}",
+            "source_type": "vision",
+            "article_id": article_id,
+            "source_id": source_id,
+            "chunk_index": "",
+            "evidence": " | ".join(result.warnings),
+        }
+        if summary.count <= 0:
+            continue
+        if summary.mean_diameter_nm is None:
+            rejected.append(
+                {
+                    **base,
+                    "reason": "vision particle measurements have no nm scale",
+                    "validator": "vision_reconciler",
+                    "value": summary.mean_diameter_px,
+                    "unit": "px",
+                }
+            )
+            continue
+        if not material_hint:
+            rejected.append(
+                {
+                    **base,
+                    "reason": "missing material formula hint for vision measurement",
+                    "validator": "vision_reconciler",
+                    "value": summary.mean_diameter_nm,
+                    "unit": "nm",
+                }
+            )
+            continue
+        rows.append(
+            {
+                **base,
+                **material_hint,
+                "material_id": material_hint.get("material_id") or material_hint.get("material_formula", "vision"),
+                "value": summary.mean_diameter_nm,
+                "unit": "nm",
+                "condition": f"mean; count={summary.count}; panel={panel.index if panel else ''}",
+            }
+        )
+    return rows, rejected
+
+
+def infer_nano_material_hint(rows: list[dict[str, Any]]) -> dict[str, str] | None:
+    for row in rows:
+        formula = str(row.get("normalized_formula") or row.get("material_formula") or "").strip()
+        if formula:
+            return {
+                "normalized_formula": formula,
+                "material_formula": str(row.get("material_formula") or formula).strip(),
+                "material_name": str(row.get("material_name") or formula).strip(),
+                "material_id": str(row.get("material_id") or formula).strip(),
+            }
+    return None
+
+
+def combine_rejected_rows(rows: list[dict[str, Any]], frame: pd.DataFrame) -> pd.DataFrame:
+    row_frame = pd.DataFrame(rows, columns=REJECTED_COLUMNS)
+    if frame.empty:
+        return row_frame
+    if row_frame.empty:
+        return frame.reset_index(drop=True)
+    return pd.concat([row_frame, frame], ignore_index=True)
 
 
 def csv_download_bytes(frame: pd.DataFrame) -> bytes:
