@@ -1,201 +1,135 @@
-# Будущий агент
+# DataCon ChemX Agent
 
-Модульный MVP ИИ-агента для датакона ИТМО 2026
+Локальный multi-agent пайплайн для извлечения химических данных из PDF-статей.
 
-## Структура проекта
+Проект умеет:
+- парсить PDF в Markdown и таблицы через Docling/Camelot;
+- выбирать релевантные чанки статьи через TF-IDF или HF embeddings;
+- извлекать small-molecule данные, например `SMILES / pMIC`;
+- извлекать nanozyme/nanocatalyst данные: формулы, размеры, `Km`, `Vmax`, yield, conversion, selectivity;
+- валидировать SMILES через RDKit, а формулы и физические величины через Python validators;
+- анализировать изображения/CV для scale bar и размеров частиц;
+- показывать trace агентов, rejected rows, conflicts, evidence и quality flags;
+- экспортировать clean/rejected/conflicts/vision/agent trace CSV/JSON.
 
-```text
-.
-├── agents/
-│   ├── core.py        # Основная логика агентов
-│   ├── prompts.py     # Промпты / инструкции
-│   └── tools.py       # Инструменты агента
-├── backend/
-│   ├── api.py         # FastAPI backend
-│   └── parsing/       # PDF parsing pipeline
-├── ui/
-│   └── app.py         # Streamlit UI наверное
-├── notebooks/         # Jupyter-ноутбуки ?
-├── .env.example       # Шаблон переменных окружения
-├── requirements.txt
-└── README.md
-```
+## Быстрый Запуск
 
-## Установка
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
-```
-
-Для Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-```
-
-## Настройка окружения
-
-Скопируйте шаблон переменных окружения:
-
-```bash
-cp .env.example .env
-```
-
-Заполните `.env` локальными значениями, например `OPENAI_API_KEY`.
-
-## Локальный запуск
-
-Ветка с тестовой реализацией:
-
-```bash
-git checkout deployment
-```
-
-Быстрая настройка окружения:
-
-```bash
-bash scripts/setup_local.sh
-```
-
-Для Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 .\scripts\setup_local.ps1
-```
-
-Или двойным кликом / из `cmd.exe`:
-
-```cmd
-scripts\setup_local.bat
-```
-
-Запуск backend:
-
-```bash
-bash scripts/run_backend.sh
-```
-
-Для Windows PowerShell:
-
-```powershell
-.\scripts\run_backend.ps1
-```
-
-Или через `cmd.exe`:
-
-```cmd
-scripts\run_backend.bat
-```
-
-Backend будет доступен по адресам:
-
-```text
-http://localhost:8000
-http://localhost:8000/docs
-```
-
-Запуск UI во втором терминале:
-
-```bash
-bash scripts/run_ui.sh
-```
-
-Для Windows PowerShell:
-
-```powershell
 .\scripts\run_ui.ps1
 ```
 
-Или через `cmd.exe`:
+Или напрямую:
 
-```cmd
-scripts\run_ui.bat
+```powershell
+.venv\Scripts\python.exe -m streamlit run ui/app.py
 ```
 
-Streamlit UI будет доступен по адресу:
+Откройте:
 
 ```text
 http://localhost:8501
 ```
 
-Первичная установка может занять время из-за `docling` и `camelot-py[cv]`. Для Camelot в режиме `lattice` на системе может потребоваться Ghostscript.
+## API-Ключи
 
-## Запуск backend
+Самый простой способ: откройте Streamlit, раскройте `API keys for this run` и вставьте ключ только на текущий запуск.
 
-```bash
-uvicorn backend.api:app --host 0.0.0.0 --port 8000 --reload
+Поддерживаются:
+- `HF_TOKEN` для Hugging Face;
+- `OPENROUTER_API_KEY` для OpenRouter;
+- `OPENAI_API_KEY` для OpenAI.
+
+Более постоянный вариант: создайте локальный `.env` рядом с `README.md`:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
-После запуска API будет доступен по адресу:
+Заполните нужные поля:
+
+```env
+HF_TOKEN=
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4.1-mini
+OPENAI_API_KEY=
+```
+
+`.env` не коммитится в git.
+
+## Как Пользоваться UI
+
+1. Выберите `Domain`: `Oxazolidinones`, `Benzimidazoles` или `Nanozymes`.
+2. Загрузите PDF.
+3. Выберите `Extractor`: `Hugging Face`, `OpenRouter`, `OpenAI` или `None`.
+4. При необходимости вставьте API-ключ в `API keys for this run`.
+5. Нажмите `Run`.
+
+Основные вкладки:
+- `Results`: чистая итоговая таблица;
+- `Evidence`: полный текстовый фрагмент для выбранной строки;
+- `Rejected`: строки, которые не прошли схему или валидаторы;
+- `Conflicts`: конфликтующие значения;
+- `Vision`: результаты CV;
+- `Agents`: trace multi-agent pipeline;
+- `Chunks`: какие чанки были выбраны retrieval-модулем;
+- `Log`: полный лог запуска.
+
+## CLI
+
+Пример запуска одной статьи:
+
+```powershell
+.venv\Scripts\python.exe scripts\run_article_pipeline.py path\to\article.pdf --domain Nanozymes --extractor openrouter --max-chunks 3
+```
+
+Доступные extractor backend:
 
 ```text
-http://localhost:8000
+auto | empty | hf | openrouter | openai
 ```
 
-Проверка статуса API:
+Артефакты сохраняются в `outputs/articles/<pdf-name>/`:
+- `clean.csv`;
+- `rejected.csv`;
+- `conflicts.csv`;
+- `prepared.md`;
+- `chunks.json`;
+- `retrieval.json`;
+- `agent_trace.json`;
+- `extraction_states.json`;
+- `manifest.json`.
 
-```bash
-curl http://localhost:8000/health
+## Проверки
+
+```powershell
+.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Тестовый парсинг PDF:
-
-```bash
-curl -X POST http://localhost:8000/parse/pdf \
-  -F "file=@sample.pdf"
-```
-
-Текущая тестовая реализация использует Docling для извлечения текста и Camelot для таблиц. Camelot сначала пробует `lattice`, затем `stream`.
-
-Для режима `lattice` у Camelot на локальной машине могут потребоваться системные зависимости вроде Ghostscript. Если они не установлены, backend вернет предупреждение и попробует режим `stream`.
-
-## Чанкование текста
-
-Backend умеет делить статью по научным разделам и выбирать только релевантные блоки, например `Experimental Section` или `Results and Discussion`:
-
-```bash
-curl -X POST http://localhost:8000/chunk/text \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Experimental Section\n\nExample text.","target_sections":["experimental section"],"max_chars":1000,"overlap_chars":100}'
-```
-
-## MAS orchestration
-
-Легковесный MAS-оркестратор реализован на чистом Python в `agent/`. Тестовый endpoint прогоняет цепочку `planner -> chunker -> synthesizer` и возвращает публичный trace выполнения без скрытых рассуждений модели:
-
-```bash
-curl -X POST http://localhost:8000/agent/run \
-  -H "Content-Type: application/json" \
-  -d '{"task":"Prepare article context","text":"Results and Discussion\n\nImportant result."}'
-```
-
-## Запуск UI
-
-В отдельном терминале:
-
-```bash
-streamlit run ui/app.py
-```
-
-Интерфейс будет доступен по адресу:
+## Архитектура
 
 ```text
-http://localhost:8501
+agent/
+  extraction_graph.py       small molecules: extractor -> RDKit critic -> retry
+  nano_extraction_graph.py  nano/catalyst: extractor -> formula/sanity critic -> retry
+  article_supervisor.py     article-level multi-agent trace
+
+backend/
+  parsing/                  PDF -> Markdown/chunks
+  retrieval.py              TF-IDF / HF embedding chunk ranking
+  aggregation.py            small-molecule aggregation
+  nano_aggregation.py       nano aggregation + rejected/conflicts
+  vision/                   CV panel/scale/particle analysis
+
+ui/
+  app.py                    Streamlit UI
+  pipeline.py               full article orchestration
 ```
 
-## Роли в команде
+## Заметки
 
-- ML Engineer: `agent/`
-- Backend/Data Engineer: `backend/`
-- Frontend Engineer: `ui/`
-- Research/QA: `notebooks/`
-
-## Цель MVP
-
-Быстро собрать рабочий прототип ИИ-агента с разделением ответственности по папкам, чтобы минимизировать конфликты при параллельной разработке.
+- Camelot lattice может предупреждать про Ghostscript. Это не блокирует весь pipeline: используется fallback.
+- OpenAI extractor пока подключён только для small molecules. Для Nanozymes используйте Hugging Face или OpenRouter.
+- Для воспроизводимости сохраняйте `manifest.json`, `agent_trace.json` и `clean.csv`.

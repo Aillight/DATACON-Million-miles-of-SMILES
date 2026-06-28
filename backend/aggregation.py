@@ -7,6 +7,8 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from backend.quality import add_quality_columns
+
 
 TABLE_SOURCE_TYPES = {"table", "docling_table", "camelot_table"}
 TEXT_SOURCE_TYPES = {"text", "chunk", "llm_text"}
@@ -30,6 +32,8 @@ OUTPUT_COLUMNS = [
     "article_id",
     "source_id",
     "chunk_index",
+    "quality_score",
+    "quality_flags",
     "evidence",
 ]
 CONFLICT_COLUMNS = [
@@ -112,21 +116,25 @@ def normalize_rows(rows: Iterable[dict[str, Any]], value_decimals: int) -> list[
 
         source_type = normalize_source_type(row.get("source_type"))
         normalized.append(
-            {
-                "canonical_smiles": canonical_smiles,
-                "property_name": property_name,
-                "value": value,
-                "unit": normalize_text(row.get("unit")),
-                "compound_id": normalize_text(row.get("compound_id")),
-                "smiles": normalize_text(row.get("smiles")),
-                "source_type": source_type,
-                "source_priority": SOURCE_PRIORITY[source_type],
-                "article_id": normalize_text(row.get("article_id")),
-                "source_id": normalize_text(row.get("source_id")),
-                "chunk_index": normalize_text(row.get("chunk_index")),
-                "evidence": normalize_text(row.get("evidence")),
-                "_row_order": row_order,
-            }
+            add_quality_columns(
+                {
+                    "canonical_smiles": canonical_smiles,
+                    "property_name": property_name,
+                    "value": value,
+                    "unit": normalize_text(row.get("unit")),
+                    "compound_id": normalize_text(row.get("compound_id")),
+                    "smiles": normalize_text(row.get("smiles")),
+                    "source_type": source_type,
+                    "source_priority": SOURCE_PRIORITY[source_type],
+                    "article_id": normalize_text(row.get("article_id")),
+                    "source_id": normalize_text(row.get("source_id")),
+                    "chunk_index": normalize_text(row.get("chunk_index")),
+                    "evidence": normalize_text(row.get("evidence")),
+                    "_row_order": row_order,
+                },
+                identifier_field="canonical_smiles",
+                identifier_flag="valid_smiles",
+            )
         )
     return normalized
 
