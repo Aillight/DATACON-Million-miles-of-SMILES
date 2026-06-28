@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-DEFAULT_DATASET = "ai-chem/chemx"
 DEFAULT_DOMAIN = "Oxazolidinones"
 DEFAULT_OUTPUT_DIR = Path("data/test_set")
 
@@ -31,8 +30,8 @@ ARTICLE_HINTS = ("pdf", "article", "paper", "document", "full_text", "text")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Download and normalize the ChemX test set.")
-    parser.add_argument("--dataset", default=DEFAULT_DATASET)
+    parser = argparse.ArgumentParser(description="Download and normalize the benchmark test set.")
+    parser.add_argument("--dataset")
     parser.add_argument("--domain", default=DEFAULT_DOMAIN)
     parser.add_argument("--split", default="test")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -41,7 +40,7 @@ def main() -> None:
     args = parser.parse_args()
 
     rows, manifest = load_rows(
-        dataset_name=args.dataset,
+        dataset_name=args.dataset or f"ai-chem/{args.domain}",
         domain=args.domain,
         split=args.split,
         trust_remote_code=args.trust_remote_code,
@@ -126,21 +125,7 @@ def load_rows(
         loaded = load_dataset(dataset_name, split=split, **load_kwargs)
     except Exception as exc:
         manifest["direct_split_warning"] = str(exc)
-        try:
-            loaded = load_dataset(dataset_name, **load_kwargs)
-        except Exception as fallback_exc:
-            domain_dataset_name = f"ai-chem/{domain}"
-            if dataset_name.lower() == DEFAULT_DATASET and domain_dataset_name.lower() != dataset_name.lower():
-                rows, fallback_manifest = load_rows(
-                    dataset_name=domain_dataset_name,
-                    domain=domain,
-                    split=split,
-                    trust_remote_code=trust_remote_code,
-                )
-                fallback_manifest["requested_dataset"] = dataset_name
-                fallback_manifest["dataset_fallback_reason"] = str(fallback_exc)
-                return rows, fallback_manifest
-            raise
+        loaded = load_dataset(dataset_name, **load_kwargs)
     datasets = select_splits(loaded, split)
     manifest["loaded_splits"] = [name for name, _ in datasets]
 
@@ -148,7 +133,7 @@ def load_rows(
     for split_name, dataset in datasets:
         for row in dataset:
             row_dict = dict(row)
-            row_dict["_chemx_split"] = split_name
+            row_dict["_benchmark_split"] = split_name
             rows.append(row_dict)
 
     if not config_name:
@@ -170,7 +155,7 @@ def select_splits(loaded: Any, split: str) -> list[tuple[str, Any]]:
     try:
         from datasets import Dataset, DatasetDict
     except ImportError as exc:
-        raise RuntimeError("datasets is required to load ChemX.") from exc
+        raise RuntimeError("datasets is required to load the benchmark dataset.") from exc
 
     if isinstance(loaded, Dataset):
         return [(split or "data", loaded)]

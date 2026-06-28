@@ -39,7 +39,7 @@ class EvaluationResult:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate generated ChemX extraction CSV against gold CSV.")
+    parser = argparse.ArgumentParser(description="Evaluate generated extraction CSV against gold CSV.")
     parser.add_argument("generated_csv", type=Path)
     parser.add_argument("gold_csv", type=Path)
     parser.add_argument("--smiles-column")

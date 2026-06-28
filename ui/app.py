@@ -187,8 +187,8 @@ def render_csv_actions(frame: pd.DataFrame, source: str, suffix: str, label: str
         st.caption(f"Local copy: {export_path}")
 
 
-st.set_page_config(page_title="DataCon ChemX Agent", layout="wide")
-st.title("ChemX Extraction Workbench")
+st.set_page_config(page_title="DataCon Extraction Agent", layout="wide")
+st.title("Scientific PDF Extraction Workbench")
 hf_token_available = bool(resolve_huggingface_token())
 openrouter_token_available = bool(resolve_openrouter_token())
 openai_token_available = bool(resolve_openai_token())

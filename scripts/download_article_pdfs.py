@@ -16,7 +16,7 @@ from typing import Any, Iterable
 
 
 DEFAULT_OUTPUT_DIR = Path("data/articles")
-DEFAULT_USER_AGENT = "DataConChemXBot/0.1 (local research prototype; mailto:example@example.com)"
+DEFAULT_USER_AGENT = "DataConExtractionBot/0.1 (local research prototype; mailto:example@example.com)"
 BROWSER_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
@@ -64,7 +64,7 @@ class DownloadResult:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Resolve DOI rows to open-access article PDFs.")
-    parser.add_argument("--csv", action="append", required=True, type=Path, help="Input ChemX CSV path.")
+    parser.add_argument("--csv", action="append", required=True, type=Path, help="Input benchmark CSV path.")
     parser.add_argument("--domain", help="Output subdirectory name. Defaults to input CSV stem.")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--access-only", action="store_true", help="Only process rows with access=1.")
@@ -275,7 +275,7 @@ def resolve_with_ncbi_oa(doi: str, timeout: float = 30.0) -> list[tuple[str, str
 
 
 def resolve_pmcid(doi: str, timeout: float = 30.0) -> str:
-    query = urllib.parse.urlencode({"ids": doi, "format": "json", "tool": "datacon-chemx-local"})
+    query = urllib.parse.urlencode({"ids": doi, "format": "json", "tool": "datacon-extraction-local"})
     url = f"https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/?{query}"
     payload, _ = fetch_url_bytes(url, timeout=timeout, accept="application/json,*/*")
     data = json.loads(payload.decode("utf-8"))
