@@ -1,4 +1,6 @@
-# DataCon — Million miles of SMILES
+# DataCon PDF Chemistry Extractor
+
+Исходное название проекта — Million miles of SMILES.
 
 Локальный пайплайн с несколькими агентами для извлечения химических данных из PDF-статей.
 
@@ -23,8 +25,8 @@
 Сначала скачайте проект (нужен Git):
 
 ```sh
-git clone https://github.com/Aillight/DATACON-Million-miles-of-SMILES.git
-cd DATACON-Million-miles-of-SMILES
+git clone https://github.com/Aillight/datacon-pdf-chemistry-extractor.git
+cd datacon-pdf-chemistry-extractor
 ```
 
 Windows PowerShell:
